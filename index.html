@@ -1,0 +1,2371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTubeリサーチツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.run/@google/genai"
+        }
+      }
+    </script>
+    <style>
+      /* For Webkit-based browsers (Chrome, Safari) */
+      ::-webkit-scrollbar { width: 12px; height: 12px; }
+      ::-webkit-scrollbar-track { background: #282828; }
+      ::-webkit-scrollbar-thumb { background-color: #555; border-radius: 6px; border: 3px solid #282828; }
+      ::-webkit-scrollbar-thumb:hover { background-color: #777; }
+      
+      html, body { height: 100%; }
+      body {
+        font-family: 'Roboto', sans-serif;
+        background-color: #181818;
+        color: #fff;
+      }
+      .hidden-tool { display: none !important; }
+      .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+      .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+      .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #cc0000;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      /* For tab styling */
+      .tab-active {
+        border-color: #cc0000;
+        background-color: #cc0000;
+        color: white;
+      }
+      .sortable-header { cursor: pointer; user-select: none;}
+      .sort-icon { display: inline-block; width: 1em; height: 1em; margin-left: 4px; opacity: 0.5; }
+      .sort-icon.active { opacity: 1; color: #cc0000; }
+
+      /* Fix date picker icon color */
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(0.8);
+      }
+
+      /* Sticky Header for Tables */
+      .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: #282828; /* Same as the card background */
+      }
+      
+      details > summary { list-style: none; }
+      details > summary::-webkit-details-marker { display: none; }
+      details > summary .summary-arrow { transition: transform 0.2s; }
+      details[open] > summary .summary-arrow { transform: rotate(90deg); }
+
+      /* Fast CSS Tooltips */
+      [data-tooltip] {
+        position: relative;
+      }
+      [data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 5px;
+        background-color: #111;
+        color: #fff;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 20;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 0s;
+      }
+      
+      /* Fix for copy button clicks */
+      .copy-btn svg {
+        pointer-events: none;
+      }
+
+      /* Markdown Output Styling for AI */
+      .markdown-output h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; color: #fca5a5; }
+      .markdown-output h2 { font-size: 1.3em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #fca5a5; }
+      .markdown-output h3 { font-size: 1.1em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #cbd5e1; }
+      .markdown-output p { margin-bottom: 0.8em; line-height: 1.6; }
+      .markdown-output ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+      .markdown-output ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.8em; }
+      .markdown-output li { margin-bottom: 0.2em; }
+      .markdown-output strong { color: #fff; font-weight: 700; }
+      .markdown-output table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+      .markdown-output th, .markdown-output td { border: 1px solid #555; padding: 8px; text-align: left; }
+      .markdown-output th { background-color: #333; font-weight: bold; }
+      
+      /* Modal */
+      #ai-modal { background-color: rgba(0,0,0,0.8); }
+      #ai-modal-content { max-height: 90vh; }
+
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Initial Welcome Screen -->
+        <div id="welcome-screen" class="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8 text-center">
+            <header class="mb-8">
+                 <div class="flex items-center justify-center w-32 h-32 mx-auto mb-6 bg-gray-800 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                </div>
+                <h1 class="text-4xl sm:text-5xl font-bold text-white tracking-tight" style="font-family: 'Roboto', sans-serif;">
+                    YouTube<span class="text-red-500">リサーチツール</span>
+                </h1>
+                <p class="mt-4 text-lg text-gray-400">YouTubeのデータを爆速で収集・AI分析できるツールです</p>
+            </header>
+            
+            <div class="max-w-2xl w-full mb-8 flex flex-col items-center gap-6">
+                <!-- YouTube API Key -->
+                <div class="w-full">
+                    <label for="apiKey" class="block text-sm font-medium text-gray-300 mb-2 text-center">
+                        <span class="bg-red-600 text-white rounded-full px-2 py-0.5 mr-2">1</span>YouTube APIキーを入力 <span class="text-red-400 text-xs">(必須)</span>
+                    </label>
+                    <div class="w-full flex items-center gap-2">
+                        <input 
+                            type="password" 
+                            id="apiKey"
+                            placeholder="YouTube Data APIキー"
+                            class="flex-grow bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-3 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 text-center disabled:opacity-70"
+                        />
+                    </div>
+                </div>
+
+                <!-- Gemini API Key -->
+                 <div class="w-full">
+                    <label for="geminiApiKey" class="block text-sm font-medium text-gray-300 mb-2 text-center">
+                        <span class="bg-blue-600 text-white rounded-full px-2 py-0.5 mr-2">2</span>Gemini APIキーを入力 <span class="text-gray-400 text-xs">(AI機能用・任意)</span>
+                    </label>
+                    <div class="w-full flex items-center gap-2">
+                        <input 
+                            type="password" 
+                            id="geminiApiKey"
+                            placeholder="Gemini APIキー (AIza...)"
+                            class="flex-grow bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-3 px-4 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center disabled:opacity-70"
+                        />
+                    </div>
+                </div>
+
+                <button id="saveApiKeyBtn" class="w-full max-w-md px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition-colors">設定を保存して開始</button>
+                <div id="apiKeyStatus" class="text-sm h-4"></div>
+            </div>
+
+            <div class="max-w-4xl w-full">
+                <h2 class="text-center text-sm font-medium text-gray-300 mb-4">
+                    <span class="bg-gray-600 text-white rounded-full px-2 py-0.5 mr-2">3</span>使用するツールを選択してください
+                </h2>
+                <div id="tool-selection" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Tool cards will be generated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Tool Screens -->
+        <div id="keyword-tool-screen" class="hidden-tool"></div>
+        <div id="channel-tool-screen" class="hidden-tool"></div>
+        <div id="video-tool-screen" class="hidden-tool"></div>
+
+        <!-- AI Modal -->
+        <div id="ai-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div id="ai-modal-content" class="bg-[#202020] rounded-xl shadow-2xl w-full max-w-4xl flex flex-col border border-gray-600 h-[85vh]">
+                <!-- Header -->
+                <div class="flex justify-between items-center p-4 border-b border-gray-700 bg-[#282828] rounded-t-xl flex-shrink-0">
+                    <h3 id="ai-modal-title" class="text-lg font-bold text-white flex items-center gap-2 truncate">AI分析</h3>
+                    <div class="flex items-center gap-2">
+                        <button id="ai-modal-download" class="text-sm bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded transition-colors hidden flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            テキスト保存
+                        </button>
+                        <button id="ai-modal-close" class="text-gray-400 hover:text-white transition-colors p-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Body -->
+                <div class="flex-grow overflow-y-auto p-6" id="ai-modal-body">
+                    <!-- Dynamic Content -->
+                </div>
+                <!-- Footer (Optional for Input) -->
+                <div id="ai-modal-footer" class="p-4 border-t border-gray-700 bg-[#282828] rounded-b-xl hidden flex-shrink-0">
+                    <form id="ai-wall-bounce-form" class="flex flex-col gap-2">
+                        <textarea id="ai-wall-bounce-input" rows="2" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="この動画についてAIに質問する..."></textarea>
+                        <button type="submit" class="self-end px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">送信</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { GoogleGenAI } from "@google/genai";
+
+        // --- STATE MANAGEMENT ---
+        const state = {
+            apiKey: '',
+            geminiApiKey: '',
+            activeTool: null, // 'keyword', 'channel', 'video'
+            keyword: {
+                currentQuery: '',
+                researchList: [],
+                searchResults: [],
+                sortKey: 'viewCount',
+                sortOrder: 'desc',
+                listSortKey: 'viewCount',
+                listSortOrder: 'desc',
+            },
+            channel: {
+                researchList: [],
+                searchResults: {}, // Keyed by channel name
+                searchedChannelNames: [],
+                sortKey: 'publishedAt',
+                sortOrder: 'desc',
+                listSortKey: 'publishedAt',
+                listSortOrder: 'desc',
+            },
+            video: {
+                analysisResults: [],
+            },
+            currentAIContext: null // { videoId, title, comments: [] }
+        };
+
+        // --- DOM ELEMENTS ---
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const apiKeyInput = document.getElementById('apiKey');
+        const geminiApiKeyInput = document.getElementById('geminiApiKey');
+        const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+        const apiKeyStatus = document.getElementById('apiKeyStatus');
+        const toolSelectionContainer = document.getElementById('tool-selection');
+        const keywordToolScreen = document.getElementById('keyword-tool-screen');
+        const channelToolScreen = document.getElementById('channel-tool-screen');
+        const videoToolScreen = document.getElementById('video-tool-screen');
+        
+        // Modal Elements
+        const aiModal = document.getElementById('ai-modal');
+        const aiModalTitle = document.getElementById('ai-modal-title');
+        const aiModalBody = document.getElementById('ai-modal-body');
+        const aiModalFooter = document.getElementById('ai-modal-footer');
+        const aiModalClose = document.getElementById('ai-modal-close');
+        const aiModalDownload = document.getElementById('ai-modal-download');
+        const aiWallBounceForm = document.getElementById('ai-wall-bounce-form');
+        const aiWallBounceInput = document.getElementById('ai-wall-bounce-input');
+
+        // --- ICONS ---
+        const icons = {
+            search: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>`,
+            users: `<svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.124-1.282-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.124-1.282.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>`,
+            videoCamera: `<svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`,
+            keywordIcon: `<svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>`,
+            arrowLeft: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>`,
+            download: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>`,
+            plus: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>`,
+            alert: `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>`,
+            copy: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>`,
+            check: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`,
+            trash: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>`,
+            arrowUp: `<svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>`,
+            arrowDown: `<svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>`,
+            arrowsUpDown: `<svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>`,
+            chevronDown: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 ml-2 -mr-1 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>`,
+            info: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>`,
+            chevronRight: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 summary-arrow" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`,
+            sparkles: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 3.214L13 21l-2.286-6.857L5 12l5.714-3.214L13 3z" /></svg>`,
+            chat: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>`,
+            chart: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>`
+        };
+
+        // --- UTILITY & HELPER FUNCTIONS ---
+        const API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
+        const RESULTS_PER_PAGE = 50;
+        
+        const showLoader = (container) => {
+            container.innerHTML = `<div class="flex flex-col items-center justify-center py-10">
+                <div class="loader"></div>
+                <p class="mt-4 text-gray-400">データを取得中...</p>
+            </div>`;
+        };
+        
+        const showModalLoader = () => {
+             aiModalBody.innerHTML = `<div class="flex flex-col items-center justify-center py-10">
+                <div class="loader"></div>
+                <p class="mt-4 text-gray-400">AIが思考中...</p>
+            </div>`;
+        };
+
+        const showError = (container, message) => {
+            container.innerHTML = `<div class="bg-red-900 border border-red-600 text-red-200 px-4 py-3 rounded-lg relative flex items-start" role="alert">
+                ${icons.alert}
+                <div>
+                    <strong class="font-bold">エラーが発生しました</strong>
+                    <span class="block sm:inline ml-2">${message}</span>
+                </div>
+            </div>`;
+        };
+
+        const fetchFromApi = async (endpoint, params) => {
+            if (!state.apiKey) throw new Error("APIキーが設定されていません。最初の画面に戻ってキーを保存してください。");
+            const urlParams = new URLSearchParams({ key: state.apiKey, ...params });
+            const response = await fetch(`${API_BASE_URL}/${endpoint}?${urlParams.toString()}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                let message = errorData.error?.message || response.statusText;
+
+                if (response.status === 400 && message.includes('API key not valid')) {
+                    message = `提供されたAPIキーが無効です。<br> - キーが正しくコピー＆ペーストされているか確認してください。<br> - Google Cloud ConsoleでYouTube Data API v3が有効になっているか確認してください。`;
+                } else if (response.status === 403) {
+                    message = `APIキーの権限が不足しているか、利用上限に達している可能性があります。<br> - Google Cloud ConsoleでAPIの割り当て量を確認してください。`;
+                } else {
+                    message = `YouTube APIエラー: ${message}`;
+                }
+                throw new Error(message);
+            }
+            return response.json();
+        };
+
+        const parseISO8601Duration = (duration) => {
+            if (!duration) return 0;
+            const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            if (!match) return 0;
+            const hours = parseInt(match[1]?.slice(0, -1) || '0');
+            const minutes = parseInt(match[2]?.slice(0, -1) || '0');
+            const seconds = parseInt(match[3]?.slice(0, -1) || '0');
+            return hours * 3600 + minutes * 60 + seconds;
+        };
+        
+        const formatDuration = (totalSeconds) => {
+            if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00';
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const parts = [];
+            if (hours > 0) parts.push(String(hours));
+            parts.push(String(minutes).padStart(2, '0'));
+            parts.push(String(seconds).padStart(2, '0'));
+            return parts.join(':');
+        };
+
+        const copyToClipboard = (text, targetElement) => {
+            if (typeof text !== 'string') {
+                console.error("Copy failed: data is not a string.", text);
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                const originalIcon = targetElement.innerHTML;
+                targetElement.innerHTML = icons.check;
+                setTimeout(() => {
+                    targetElement.innerHTML = originalIcon;
+                }, 1500);
+            }).catch(err => console.error('Copy failed', err));
+        };
+
+        const downloadTextFile = (filename, text) => {
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+        
+        const downloadAsCSV = (data, filename = 'export.csv') => {
+            if (data.length === 0) return;
+            const header = Object.keys(data[0]).join(',');
+            const rows = data.map(row => 
+                Object.values(row).map(value => {
+                    const strValue = String(value ?? '');
+                    // Formulas with commas, and any text with special characters, must be quoted.
+                    if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+                        return `"${strValue.replace(/"/g, '""')}"`;
+                    }
+                    return strValue;
+                }).join(',')
+            );
+            const csvContent = [header, ...rows].join('\n');
+            const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+        
+        const extractVideoId = (url) => {
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        };
+
+        const simpleMarkdownToHtml = (markdown) => {
+            if (!markdown) return '';
+            let html = markdown
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^\* (.*$)/gim, '<ul><li>$1</li></ul>')
+                .replace(/^\- (.*$)/gim, '<ul><li>$1</li></ul>')
+                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\n/gim, '<br>');
+            
+            // Handle Tables (Simple replacement for markdown tables)
+            html = html.replace(/\|(.+)\|/g, (match) => {
+                const cells = match.split('|').filter(cell => cell.trim() !== '');
+                // Check if it's a separator row (---)
+                if (cells.some(c => c.trim().match(/^[-:]+$/))) return '';
+                const isHeader = false; // Logic to detect header would be complex in regex, assuming standard rows mainly
+                return `<tr>${cells.map(c => `<td>${c.trim()}</td>`).join('')}</tr>`;
+            });
+            // Wrap trs in table - rudimentary check
+            if (html.includes('<tr>')) {
+                 html = html.replace(/((?:<tr>.*?<\/tr>)+)/g, '<table>$1</table>');
+            }
+
+            // Fix nested uls from simple replace
+            html = html.replace(/<\/ul><br><ul>/g, '');
+            return `<div class="markdown-output">${html}</div>`;
+        };
+
+        // --- YOUTUBE SERVICE FUNCTIONS ---
+        const getVideoDetailsByIds = async (videoIds) => {
+            if (videoIds.length === 0) return [];
+
+            const videoDetailsPromises = [];
+            for (let i = 0; i < videoIds.length; i += RESULTS_PER_PAGE) {
+                const chunk = videoIds.slice(i, i + RESULTS_PER_PAGE);
+                videoDetailsPromises.push(
+                    fetchFromApi('videos', { part: 'snippet,statistics,contentDetails', id: chunk.join(',') })
+                );
+            }
+            const videoResponses = await Promise.all(videoDetailsPromises);
+            const videos = videoResponses.flatMap(res => res.items);
+
+            const channelIds = [...new Set(videos.map(v => v.snippet.channelId))];
+            if (channelIds.length === 0) {
+                return videos.map(video => ({...video, channelStats: {}}));
+            }
+            const channelDetailsPromises = [];
+            for (let i = 0; i < channelIds.length; i += RESULTS_PER_PAGE) {
+                const chunk = channelIds.slice(i, i + RESULTS_PER_PAGE);
+                channelDetailsPromises.push(
+                    fetchFromApi('channels', { part: 'statistics,snippet', id: chunk.join(',') })
+                );
+            }
+            const channelResponses = await Promise.all(channelDetailsPromises);
+            const channelStats = channelResponses.flatMap(res => res.items).reduce((acc, channel) => {
+                acc[channel.id] = {
+                    stats: channel.statistics,
+                    snippet: channel.snippet
+                };
+                return acc;
+            }, {});
+
+            return videos.map((video, index) => {
+                const subs = parseInt(channelStats[video.snippet.channelId]?.stats?.subscriberCount, 10) || 0;
+                const views = parseInt(video.statistics.viewCount, 10) || 0;
+                return {
+                    id: video.id,
+                    title: video.snippet.title,
+                    thumbnail: video.snippet.thumbnails.medium.url,
+                    channelTitle: video.snippet.channelTitle,
+                    publishedAt: video.snippet.publishedAt,
+                    viewCount: views,
+                    likeCount: parseInt(video.statistics.likeCount, 10) || 0,
+                    commentCount: parseInt(video.statistics.commentCount, 10) || 0,
+                    channelId: video.snippet.channelId,
+                    duration: parseISO8601Duration(video.contentDetails.duration),
+                    subscriberCount: subs,
+                    channelOpenDate: channelStats[video.snippet.channelId]?.snippet?.publishedAt,
+                    viewRate: subs > 0 ? (views / subs) * 100 : 0,
+                };
+            });
+        };
+        
+        const searchVideosByKeyword = async (options) => {
+            const { query, sortOrder, periodDays, searchLimit, videoDuration } = options;
+            const publishedAfter = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+            
+            let allVideoIds = new Set();
+            let nextPageToken = null;
+            
+            const needsManualFilter = videoDuration === 'under_1_min' || videoDuration === 'over_4_min_all';
+            const fetchLimit = needsManualFilter ? Math.max(searchLimit * 4, 150) : searchLimit;
+            const apiDurationMapping = { under_4_min: 'short', over_20_min: 'long' };
+            const apiVideoDuration = apiDurationMapping[videoDuration] || 'any';
+            
+            do {
+                const searchParams = {
+                    part: 'snippet',
+                    q: query,
+                    type: 'video',
+                    order: sortOrder,
+                    publishedAfter,
+                    maxResults: Math.min(RESULTS_PER_PAGE, fetchLimit - allVideoIds.size),
+                    videoDuration: apiVideoDuration,
+                };
+                if (nextPageToken) searchParams.pageToken = nextPageToken;
+                
+                const searchData = await fetchFromApi('search', searchParams);
+                if (searchData.items) {
+                    searchData.items.forEach(item => item.id.videoId && allVideoIds.add(item.id.videoId));
+                }
+                nextPageToken = searchData.nextPageToken;
+            } while (nextPageToken && allVideoIds.size < fetchLimit);
+
+            let combinedData = await getVideoDetailsByIds(Array.from(allVideoIds));
+
+            if (videoDuration === 'under_1_min') combinedData = combinedData.filter(v => v.duration < 60);
+            if (videoDuration === 'over_4_min_all') combinedData = combinedData.filter(v => v.duration >= 240);
+            if (videoDuration === 'under_4_min') combinedData = combinedData.filter(v => v.duration < 240);
+
+            return combinedData.filter(video => 
+                video.viewCount >= options.minViewCount &&
+                (!options.maxSubscribers || video.subscriberCount <= options.maxSubscribers)
+            ).slice(0, searchLimit);
+        };
+
+        const findChannelIdByName = async (channelName) => {
+            const data = await fetchFromApi('search', {
+                part: 'snippet',
+                q: channelName,
+                type: 'channel',
+                maxResults: 1
+            });
+            if (data.items.length === 0) throw new Error(`チャンネル "${channelName}" が見つかりませんでした。`);
+            return data.items[0].id.channelId;
+        };
+
+        const searchVideosByChannel = async (channelId, options) => {
+            const { publishedAfter, videoDuration, minViewCount, searchLimit } = options;
+            const collectedVideos = [];
+            let nextPageToken = null;
+            
+            const channelDetails = await fetchFromApi('channels', { part: 'statistics,snippet', id: channelId });
+            const subscriberCount = parseInt(channelDetails.items[0]?.statistics?.subscriberCount || '0', 10);
+            const channelOpenDate = channelDetails.items[0]?.snippet?.publishedAt;
+
+            // Loop to fetch until we have enough videos that match the filter criteria
+            do {
+                const params = {
+                    part: 'snippet',
+                    channelId: channelId,
+                    type: 'video',
+                    order: 'date',
+                    maxResults: RESULTS_PER_PAGE, // Fetch full pages to ensure we get enough data
+                };
+                if (publishedAfter) params.publishedAfter = publishedAfter;
+                if (nextPageToken) params.pageToken = nextPageToken;
+
+                const searchData = await fetchFromApi('search', params);
+                
+                if (searchData.items.length > 0) {
+                     const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+                     const videoDetailsResponse = await fetchFromApi('videos', { part: 'snippet,statistics,contentDetails', id: videoIds });
+                     
+                     // Process this batch
+                     let batchVideos = videoDetailsResponse.items.map((video) => {
+                        const views = parseInt(video.statistics.viewCount || '0', 10);
+                        const likes = parseInt(video.statistics.likeCount || '0', 10);
+                        const comments = parseInt(video.statistics.commentCount || '0', 10);
+                        return {
+                            id: video.id,
+                            title: video.snippet.title,
+                            thumbnail: video.snippet.thumbnails.medium.url,
+                            publishedAt: video.snippet.publishedAt,
+                            viewCount: views,
+                            likeCount: likes,
+                            commentCount: comments,
+                            duration: parseISO8601Duration(video.contentDetails.duration),
+                            viewRate: subscriberCount > 0 ? (views / subscriberCount) * 100 : 0,
+                            commentRate: views > 0 ? (comments / views) * 100 : 0,
+                            likeRate: views > 0 ? (likes / views) * 100 : 0,
+                            channelName: video.snippet.channelTitle,
+                            channelId: video.snippet.channelId,
+                            subscriberCount: subscriberCount,
+                            channelOpenDate: channelOpenDate,
+                        };
+                    });
+
+                    // Filter this batch
+                    if (videoDuration === 'under_1_min') batchVideos = batchVideos.filter(v => v.duration < 60);
+                    else if (videoDuration === 'under_4_min') batchVideos = batchVideos.filter(v => v.duration < 240);
+                    else if (videoDuration === 'over_4_min') batchVideos = batchVideos.filter(v => v.duration >= 240);
+                    else if (videoDuration === 'over_20_min') batchVideos = batchVideos.filter(v => v.duration >= 1200);
+
+                    if (minViewCount > 0) batchVideos = batchVideos.filter(v => v.viewCount >= minViewCount);
+                    
+                    collectedVideos.push(...batchVideos);
+                }
+                
+                nextPageToken = searchData.nextPageToken;
+
+                // Stop if we have enough videos or if there are no more pages
+                if (collectedVideos.length >= searchLimit) break;
+
+            } while (nextPageToken);
+            
+            // Return exactly the limit
+            return collectedVideos.slice(0, searchLimit);
+        };
+        
+        const fetchCommentsForVideo = async (videoId) => {
+            try {
+                const response = await fetchFromApi('commentThreads', {
+                    part: 'snippet',
+                    videoId: videoId,
+                    order: 'relevance',
+                    maxResults: 50 // Fetch top 50 relevant comments for AI analysis
+                });
+                return response.items.map(item => ({
+                    author: item.snippet.topLevelComment.snippet.authorDisplayName,
+                    text: item.snippet.topLevelComment.snippet.textOriginal || item.snippet.topLevelComment.snippet.textDisplay,
+                    likeCount: item.snippet.topLevelComment.snippet.likeCount,
+                }));
+            } catch (error) {
+                console.warn(`Comments disabled or fetch error for ${videoId}`, error);
+                return [];
+            }
+        };
+
+        const analyzeVideos = async (videoIds) => {
+            const detailedVideos = await getVideoDetailsByIds(videoIds);
+            const commentPromises = detailedVideos.map(video => fetchCommentsForVideo(video.id));
+            const commentsLists = await Promise.all(commentPromises);
+            
+            const videoDetailsData = await fetchFromApi('videos', {
+                part: 'snippet', id: videoIds.join(',')
+            });
+
+            return detailedVideos.map((video, index) => {
+                 const fullVideoData = videoDetailsData.items.find(v => v.id === video.id);
+                 const views = video.viewCount || 0;
+                 const likes = video.likeCount || 0;
+                 const commentsCount = video.commentCount || 0;
+                 return {
+                    ...video,
+                    description: fullVideoData?.snippet?.description || '',
+                    tags: fullVideoData?.snippet?.tags || [],
+                    likeRate: views > 0 ? (likes / views) * 100 : 0,
+                    commentRate: views > 0 ? (commentsCount / views) * 100 : 0,
+                    comments: commentsLists[index]
+                };
+            });
+        };
+        
+        // --- AI LOGIC ---
+        const openAIModal = (title, showFooter = false) => {
+            aiModalTitle.innerHTML = title;
+            aiModalBody.innerHTML = '';
+            aiModal.classList.remove('hidden');
+            aiModalDownload.classList.add('hidden'); // Default hidden
+            if (showFooter) aiModalFooter.classList.remove('hidden');
+            else aiModalFooter.classList.add('hidden');
+        };
+
+        const closeAIModal = () => {
+            aiModal.classList.add('hidden');
+            state.currentAIContext = null;
+        };
+        
+        const runAIAnalysis = async (videoId, title, existingComments) => {
+            if (!state.geminiApiKey) {
+                alert("AI機能を使用するにはGemini APIキーの設定が必要です。");
+                return;
+            }
+            openAIModal(`${icons.sparkles} コメントAI分析: ${title}`);
+            showModalLoader();
+
+            try {
+                let comments = existingComments;
+                if (!comments) {
+                    comments = await fetchCommentsForVideo(videoId);
+                }
+                
+                if (comments.length === 0) {
+                    aiModalBody.innerHTML = '<p class="text-gray-400 p-4">コメントが見つからないか、取得できませんでした。AI分析にはコメントが必要です。</p>';
+                    return;
+                }
+
+                const commentText = comments.map(c => `- ${c.text}`).join('\n');
+                const prompt = `
+                Video Title: ${title}
+                Comments:
+                ${commentText}
+
+                Analyze the comments above and provide a psychology analysis in Japanese using the following Markdown format.
+                
+                ## コメント心理分析
+                
+                ### コメントをする理由
+                (文章)
+                
+                ### コメントから見えてくる深層心理
+                (文章)
+                - 具体例: 
+                
+                ### コメントから見えてくる動画反映すべき項目
+                (文章)
+
+                ★まとめ
+                (文章)
+                `;
+
+                const ai = new GoogleGenAI({ apiKey: state.geminiApiKey });
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                });
+                
+                const resultText = response.text;
+                aiModalBody.innerHTML = simpleMarkdownToHtml(resultText);
+                
+                // Enable download button
+                aiModalDownload.classList.remove('hidden');
+                aiModalDownload.onclick = () => downloadTextFile(`AI_Analysis_${videoId}.txt`, resultText);
+
+            } catch (e) {
+                console.error(e);
+                aiModalBody.innerHTML = `<p class="text-red-400 p-4">AI分析中にエラーが発生しました: ${e.message}</p>`;
+            }
+        };
+
+        const runTrendAnalysis = async (videos, contextLabel) => {
+             if (!state.geminiApiKey) {
+                alert("AI機能を使用するにはGemini APIキーの設定が必要です。");
+                return;
+            }
+            if (!videos || videos.length === 0) {
+                alert("分析する動画がありません。");
+                return;
+            }
+            
+            // Limit to top 30 for metadata context (User requested pattern analysis which needs more data)
+            const topVideos = videos.slice(0, 30);
+            
+            openAIModal(`${icons.chart} 全体傾向分析 (${contextLabel})`, false);
+            showModalLoader();
+            aiModalBody.innerHTML += `<p class="text-center text-sm text-gray-500 mt-2">上位動画の情報を収集して分析中...</p>`;
+
+            try {
+                // Fetch comments for the top 5 videos to give qualitative context (to avoid quota exhaust)
+                const videosWithComments = [];
+                for (let i = 0; i < Math.min(topVideos.length, 5); i++) {
+                    const v = topVideos[i];
+                    try {
+                        const comments = await fetchCommentsForVideo(v.id);
+                        videosWithComments.push({
+                            title: v.title,
+                            channel: v.channelTitle || v.channelName,
+                            comments: comments.slice(0, 15).map(c => c.text) // Top 15 comments
+                        });
+                    } catch (e) { console.warn('Failed to fetch comments for trend analysis', v.id); }
+                }
+
+                // Construct Prompt
+                let dataContext = `This is YouTube data for ${contextLabel}.
+                
+                Video Titles (Top 30):
+                ${topVideos.map(v => `- ${v.title} (再生数: ${v.viewCount})`).join('\n')}
+                
+                Detailed Comments from Top 5 Videos:
+                ${videosWithComments.map(v => `
+                    Video: ${v.title}
+                    Comments: ${v.comments.join(' | ')}
+                `).join('\n\n')}
+                `;
+
+                const prompt = `
+                ${dataContext}
+
+                Based on the titles, view counts, and comments provided, analyze the trends in Japanese using the following sections format strictly. Use Markdown.
+
+                ## YouTubeデータ分析: ${contextLabel}
+
+                ### 1. このデータからわかること
+                (Analyze what can be understood from this data)
+
+                ### 2. 企画のパターン分析
+                (Analyze the title patterns. Present "Macro Patterns" (大パターン) and "Micro Patterns" (中パターン). For each Macro Pattern, provide at least 3 Micro Patterns.)
+
+                ### 3. 視聴者が期待すること
+                (Analyze what viewers are expecting based on the comments)
+                
+                ### 4. マネすべき動画
+                (List specific videos from the provided list that should be benchmarked/imitated)
+
+                ### 5. 新企画の提案
+                (Propose multiple specific new video ideas based on the analysis)
+
+                ### 6. 動画制作で意識すべきこと
+                (Provide advice for video production based on the analysis)
+                `;
+
+                const ai = new GoogleGenAI({ apiKey: state.geminiApiKey });
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                });
+                
+                const resultText = response.text;
+                aiModalBody.innerHTML = simpleMarkdownToHtml(resultText);
+                
+                // Enable download button
+                aiModalDownload.classList.remove('hidden');
+                aiModalDownload.onclick = () => downloadTextFile(`Trend_Analysis_${new Date().toISOString().slice(0,10)}.txt`, resultText);
+
+            } catch (e) {
+                console.error(e);
+                aiModalBody.innerHTML = `<p class="text-red-400 p-4">傾向分析中にエラーが発生しました: ${e.message}</p>`;
+            }
+        };
+
+        const startWallBounce = async (videoId, title, existingComments) => {
+             if (!state.geminiApiKey) {
+                alert("AI機能を使用するにはGemini APIキーの設定が必要です。");
+                return;
+            }
+            // Prepare context
+            let comments = existingComments;
+             if (!comments) {
+                 // Show temporary loader while fetching comments before opening modal properly
+                 openAIModal(`${icons.chat} 壁打ち機能: ${title}`, true);
+                 showModalLoader();
+                 try {
+                     comments = await fetchCommentsForVideo(videoId);
+                 } catch(e) {
+                      aiModalBody.innerHTML = `<p class="text-red-400 p-4">コメント取得中にエラーが発生しました: ${e.message}</p>`;
+                      return;
+                 }
+            }
+            
+            state.currentAIContext = { videoId, title, comments };
+            
+            openAIModal(`${icons.chat} 壁打ち機能: ${title}`, true);
+            aiModalBody.innerHTML = `
+                <div class="space-y-4 text-gray-300">
+                    <p>この動画の視聴者反応や傾向について、AIと壁打ち（ブレインストーミング）ができます。</p>
+                    <p class="text-sm bg-[#333] p-3 rounded">例: 「なぜこの動画は高評価が多いのですか？」「視聴者は何に一番怒っていますか？」「どのような次回作が期待されていますか？」</p>
+                    <div id="ai-chat-history" class="space-y-4 mt-4 pb-20"></div>
+                </div>
+            `;
+        };
+
+        const handleWallBounceSubmit = async (e) => {
+            e.preventDefault();
+            const input = aiWallBounceInput.value.trim();
+            if (!input || !state.currentAIContext) return;
+            
+            const historyDiv = document.getElementById('ai-chat-history');
+            const userBubble = document.createElement('div');
+            userBubble.className = 'bg-blue-900/50 p-3 rounded-lg self-end ml-8 border border-blue-800';
+            userBubble.textContent = input;
+            historyDiv.appendChild(userBubble);
+            
+            aiWallBounceInput.value = '';
+            
+            const loadingBubble = document.createElement('div');
+            loadingBubble.className = 'bg-gray-700/50 p-3 rounded-lg self-start mr-8 flex items-center gap-2';
+            loadingBubble.innerHTML = '<div class="loader w-4 h-4 border-2"></div> AIが思考中...';
+            historyDiv.appendChild(loadingBubble);
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+
+            try {
+                const commentText = state.currentAIContext.comments.map(c => `- ${c.text}`).join('\n');
+                const prompt = `
+                Context: You are a YouTube analyst assisting a creator.
+                Video Title: ${state.currentAIContext.title}
+                Comments:
+                ${commentText}
+
+                User Question: ${input}
+
+                Answer the user's question based on the video title and comments provided. Be insightful and specific. Reply in Japanese.
+                `;
+                
+                const ai = new GoogleGenAI({ apiKey: state.geminiApiKey });
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                });
+
+                historyDiv.removeChild(loadingBubble);
+                const aiBubble = document.createElement('div');
+                aiBubble.className = 'bg-gray-800 p-3 rounded-lg self-start mr-8 border border-gray-600 markdown-output';
+                aiBubble.innerHTML = simpleMarkdownToHtml(response.text);
+                historyDiv.appendChild(aiBubble);
+                
+                // Scroll to bottom of modal body
+                aiModalBody.scrollTop = aiModalBody.scrollHeight;
+
+            } catch (e) {
+                historyDiv.removeChild(loadingBubble);
+                const errorBubble = document.createElement('div');
+                errorBubble.className = 'text-red-400 text-sm p-2';
+                errorBubble.textContent = `エラー: ${e.message}`;
+                historyDiv.appendChild(errorBubble);
+            }
+        };
+
+        // --- UI RENDERING & LOGIC ---
+        const updateView = () => {
+            welcomeScreen.style.display = state.activeTool ? 'none' : 'flex';
+            keywordToolScreen.classList.toggle('hidden-tool', state.activeTool !== 'keyword');
+            channelToolScreen.classList.toggle('hidden-tool', state.activeTool !== 'channel');
+            videoToolScreen.classList.toggle('hidden-tool', state.activeTool !== 'video');
+        };
+
+        const navigateToTool = (toolName) => {
+            state.activeTool = toolName;
+            switch(toolName) {
+                case 'keyword': renderKeywordTool(); break;
+                case 'channel': renderChannelTool(); break;
+                case 'video': renderVideoTool(); break;
+                case null:
+                default: break;
+            }
+            updateView();
+        };
+
+        const createToolHeader = (title, toolKey) => {
+             const tools = [
+                { key: 'keyword', name: 'キーワードリサーチ' },
+                { key: 'channel', name: 'チャンネルリサーチ' },
+                { key: 'video', name: '動画分析' }
+            ];
+            const navButtons = tools.map(t => {
+                const isActive = t.key === toolKey;
+                return `<button data-navigate-to="${t.key}" 
+                    class="px-4 py-2 text-white text-sm font-semibold rounded-lg shadow-md transition-colors 
+                           ${isActive 
+                                ? `bg-red-800 cursor-default` 
+                                : `bg-red-600 hover:bg-red-700`}">
+                    ${t.name}へ
+                </button>`;
+            }).join('');
+
+            return `
+                 <header class="sticky top-0 z-20 bg-[#181818] py-3 shadow-md border-b border-gray-700">
+                    <div class="w-full max-w-screen-2xl mx-auto flex flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center gap-2 flex-wrap">
+                        ${navButtons}
+                        </div>
+                        <button data-navigate-to="null" class="flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-md transition-colors">
+                            ${icons.arrowLeft} ツール選択に戻る
+                        </button>
+                    </div>
+                </header>`;
+        };
+        
+        const createHowToUseSection = (title, steps) => `
+            <details class="bg-[#282828] p-4 rounded-xl shadow-lg border border-gray-700 mb-8">
+                <summary class="font-bold text-lg cursor-pointer hover:text-red-400 flex items-center">${icons.info} ${title} の使い方</summary>
+                <div class="mt-4 pl-6 text-gray-300 space-y-2">
+                    ${steps.map((step, i) => `<p><span class="font-bold text-red-400 mr-2">${i+1}.</span>${step}</p>`).join('')}
+                </div>
+            </details>
+        `;
+        
+        // --- CSV DOWNLOAD HELPERS ---
+        const downloadKeywordCSV = (data, filename) => {
+            if (data.length === 0) return;
+            const csvData = data.map((v, index) => {
+                const rowNum = index + 2;
+                return {
+                    'タイトル': v.title,
+                    '動画URL': `https://www.youtube.com/watch?v=${v.id}`,
+                    'サムネイル': `=IMAGE("http://img.youtube.com/vi/"&SUBSTITUTE(B${rowNum},"https://www.youtube.com/watch?v=","")&"/mqdefault.jpg",1)`,
+                    'チャンネル名': v.channelTitle,
+                    '投稿日': new Date(v.publishedAt).toLocaleDateString(),
+                    '再生回数': v.viewCount,
+                    '動画時間': formatDuration(v.duration),
+                    'チャンネル登録者数': v.subscriberCount,
+                    'チャンネル開設時期': v.channelOpenDate ? new Date(v.channelOpenDate).toLocaleDateString() : '',
+                    '再生率': v.viewRate.toFixed(2),
+                    'メモ': v.note || '',
+                };
+            });
+            downloadAsCSV(csvData, filename);
+        };
+
+        const downloadChannelCSV = (data, filename) => {
+            if (data.length === 0) return;
+            const csvData = data.map((v, index) => {
+                const rowNum = index + 2;
+                return {
+                    'タイトル': v.title,
+                    '動画URL': `https://www.youtube.com/watch?v=${v.id}`,
+                    'サムネイル': `=IMAGE("http://img.youtube.com/vi/"&SUBSTITUTE(B${rowNum},"https://www.youtube.com/watch?v=","")&"/mqdefault.jpg",1)`,
+                    'チャンネル名': v.channelName,
+                    '投稿日': new Date(v.publishedAt).toLocaleDateString(),
+                    '再生回数': v.viewCount,
+                    '高評価数': v.likeCount,
+                    'コメント数': v.commentCount,
+                    '動画時間': formatDuration(v.duration),
+                    'チャンネル登録者数': v.subscriberCount,
+                    'チャンネル開設時期': v.channelOpenDate ? new Date(v.channelOpenDate).toLocaleDateString() : '',
+                    '再生率': v.viewRate.toFixed(2),
+                    '高評価率': v.likeRate.toFixed(2),
+                    'コメント率': v.commentRate.toFixed(2),
+                    'メモ': v.note || '',
+                };
+            });
+            downloadAsCSV(csvData, filename);
+        };
+        
+        const downloadVideoAnalysisCSV = (videos, filename) => {
+            if (videos.length === 0) return;
+
+            const escapeCSV = (value) => {
+                const strValue = String(value ?? '');
+                if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
+                    return `"${strValue.replace(/"/g, '""')}"`;
+                }
+                return strValue;
+            };
+
+            let csvContent = [];
+
+            videos.forEach((video, index) => {
+                if (index > 0) {
+                    csvContent.push(''); 
+                    csvContent.push('');
+                }
+                
+                const videoData = [
+                    ['チャンネル名', video.channelTitle],
+                    ['チャンネル登録者数', video.subscriberCount],
+                    ['チャンネル開設時期', video.channelOpenDate ? new Date(video.channelOpenDate).toLocaleDateString() : ''],
+                    ['タイトル', video.title],
+                    ['動画URL', `https://www.youtube.com/watch?v=${video.id}`],
+                    ['サムネイル', `=IMAGE("http://img.youtube.com/vi/${video.id}/mqdefault.jpg",1)`],
+                    ['再生回数', video.viewCount],
+                    ['投稿日', new Date(video.publishedAt).toLocaleDateString()],
+                    ['動画時間', formatDuration(video.duration)],
+                    ['高評価数', video.likeCount],
+                    ['コメント数', video.commentCount],
+                    ['再生率', `${video.viewRate.toFixed(2)}%`],
+                    ['高評価率', `${video.likeRate.toFixed(2)}%`],
+                    ['コメント率', `${video.commentRate.toFixed(2)}%`],
+                    ['概要欄', video.description],
+                ];
+
+                videoData.forEach(row => {
+                    csvContent.push(row.map(escapeCSV).join(','));
+                });
+                
+                if (video.comments && video.comments.length > 0) {
+                    csvContent.push(''); // Add a blank line for spacing
+                    csvContent.push(['コメントの評価数', 'コメント'].map(escapeCSV).join(',')); // Add header
+                    video.comments.forEach(comment => {
+                        const commentRow = [comment.likeCount, comment.text];
+                        csvContent.push(commentRow.map(escapeCSV).join(','));
+                    });
+                }
+            });
+
+            const csvString = csvContent.join('\n');
+            const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+
+        // --- KEYWORD TOOL ---
+        const handleKeywordSearch = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const resultsContainer = document.getElementById('kw-results-container');
+            const errorContainer = document.getElementById('kw-error-container');
+            const submitButton = form.querySelector('button[type="submit"]');
+
+            errorContainer.innerHTML = '';
+            showLoader(resultsContainer);
+            if (submitButton) submitButton.disabled = true;
+
+            try {
+                const formData = new FormData(form);
+                state.keyword.currentQuery = formData.get('query'); // Save Query
+                const options = {
+                    query: formData.get('query'),
+                    sortOrder: formData.get('sortOrder'),
+                    periodDays: parseInt(formData.get('periodDays'), 10),
+                    minViewCount: parseInt(formData.get('minViewCount'), 10) || 0,
+                    maxSubscribers: formData.get('maxSubscribers') ? parseInt(formData.get('maxSubscribers'), 10) : null,
+                    videoDuration: formData.get('videoDuration'),
+                    searchLimit: parseInt(formData.get('searchLimit'), 10),
+                };
+                
+                const results = await searchVideosByKeyword(options);
+                state.keyword.searchResults = results;
+                renderKeywordResultsTable();
+
+            } catch (error) {
+                console.error(error);
+                showError(errorContainer, error.message);
+                resultsContainer.innerHTML = '<p class="text-center py-10 text-gray-500">検索中にエラーが発生しました。</p>';
+            } finally {
+                if (submitButton) submitButton.disabled = false;
+            }
+        };
+
+        const renderKeywordResultsTable = () => {
+             const container = document.getElementById('kw-results-container');
+             const results = state.keyword.searchResults;
+             document.getElementById('kw-results-count').textContent = results.length;
+             document.getElementById('kw-add-all-btn').disabled = results.length === 0;
+             document.getElementById('kw-download-all-btn').disabled = results.length === 0;
+             document.getElementById('kw-trend-analysis-btn').disabled = results.length === 0;
+
+            if (results.length === 0) {
+                container.innerHTML = '<p class="text-center py-10 text-gray-500">条件に一致する動画は見つかりませんでした。</p>';
+                return;
+            }
+            
+            const { sortKey, sortOrder } = state.keyword;
+            results.sort((a, b) => {
+                const valA = a[sortKey];
+                const valB = b[sortKey];
+                if (typeof valA === 'string') {
+                    return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                return sortOrder === 'asc' ? valA - valB : valB - a[sortKey];
+            });
+            
+            const renderHeader = (key, label, classes = '') => {
+                let icon = icons.arrowsUpDown;
+                if (sortKey === key) icon = sortOrder === 'asc' ? icons.arrowUp : icons.arrowDown;
+                const justifyClass = classes.includes('text-left') ? 'justify-start' : 'justify-end';
+                return `<th data-sort-key="${key}" class="kw-sort-header sortable-header ${classes}">
+                            <div class="flex items-center ${justifyClass}">${label} <span class="sort-icon ${sortKey === key ? 'active' : ''}">${icon}</span></div>
+                        </th>`;
+            };
+            
+            const tableHeader = `
+                <thead class="sticky-header">
+                    <tr>
+                        <th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">動画</th>
+                        ${renderHeader('publishedAt', '公開日', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderHeader('viewCount', '再生回数', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderHeader('duration', '時間', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderHeader('subscriberCount', '登録者', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderHeader('channelOpenDate', '開設日', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderHeader('viewRate', '再生率', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-32">アクション</th>
+                    </tr>
+                </thead>`;
+
+            const tableRows = results.map((video) => {
+                const isInList = state.keyword.researchList.some(item => item.id === video.id);
+                // Video title needs to be escaped for dataset
+                const safeTitle = video.title.replace(/"/g, '&quot;');
+                const openDate = video.channelOpenDate ? new Date(video.channelOpenDate).toLocaleDateString() : '-';
+                return `
+                <tr class="hover:bg-gray-800">
+                     <td class="px-2 py-3" style="min-width: 300px;">
+                        <div class="flex items-center gap-3">
+                            <div class="w-32 h-18 flex-shrink-0 bg-black rounded-md">
+                                <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer">
+                                    <img src="${video.thumbnail}" alt="${video.title}" class="w-full h-full object-cover rounded-md">
+                                </a>
+                            </div>
+                            <div class="flex-grow">
+                                <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer" class="font-semibold line-clamp-2 hover:text-red-400">${video.title}</a>
+                                <p class="text-xs text-gray-400 mt-1 truncate">${video.channelTitle}</p>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <button class="copy-btn" data-copy-text="https://www.youtube.com/watch?v=${video.id}" data-tooltip="動画URLをコピー">${icons.copy}</button>
+                                    <button class="copy-btn" data-copy-text="${video.channelTitle}" data-tooltip="チャンネル名をコピー">${icons.copy}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${new Date(video.publishedAt).toLocaleDateString()}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${video.viewCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${formatDuration(video.duration)}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${video.subscriberCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${openDate}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${video.viewRate.toFixed(2)}%</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-center">
+                        <div class="flex flex-col gap-2 items-center w-32">
+                             <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-analysis-btn w-full text-white bg-purple-600 hover:bg-purple-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                ${icons.sparkles} コメント分析
+                            </button>
+                             <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-wall-bounce-btn w-full text-white bg-green-600 hover:bg-green-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                ${icons.chat} 壁打ち機能
+                            </button>
+                            <button data-video-id="${video.id}" ${isInList ? 'disabled' : ''} class="add-to-list-btn w-full text-white font-semibold py-1 px-3 rounded transition-colors text-xs ${isInList ? 'bg-gray-600 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">
+                                ${isInList ? '追加済' : 'リスト追加'}
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+            
+            container.innerHTML = `<div class="overflow-auto" style="max-height: 80vh;"><table class="min-w-full divide-y divide-gray-700">${tableHeader}<tbody class="divide-y divide-gray-700">${tableRows}</tbody></table></div>`;
+        };
+        
+        const renderKeywordResearchList = () => {
+            const container = document.getElementById('kw-research-list-container');
+            const list = state.keyword.researchList;
+            
+            const { listSortKey, listSortOrder } = state.keyword;
+            list.sort((a, b) => {
+                const valA = a[listSortKey];
+                const valB = b[listSortKey];
+                if (typeof valA === 'string') return listSortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                return listSortOrder === 'asc' ? valA - valB : valB - a[listSortKey];
+            });
+            
+            document.getElementById('kw-list-count').textContent = list.length;
+            document.getElementById('kw-download-list-btn').disabled = list.length === 0;
+            document.getElementById('kw-clear-list-btn').disabled = list.length === 0;
+
+            if (list.length === 0) {
+                 container.innerHTML = '<p class="text-center py-10 text-gray-500">リサーチリストは空です。</p>';
+                 return;
+            }
+
+            const renderListHeader = (key, label, classes = '') => {
+                let icon = icons.arrowsUpDown;
+                if (listSortKey === key) icon = listSortOrder === 'asc' ? icons.arrowUp : icons.arrowDown;
+                const justifyClass = classes.includes('text-left') ? 'justify-start' : 'justify-end';
+                return `<th data-sort-key="${key}" class="kw-list-sort-header sortable-header ${classes}">
+                            <div class="flex items-center ${justifyClass}">${label} <span class="sort-icon ${listSortKey === key ? 'active' : ''}">${icon}</span></div>
+                        </th>`;
+            };
+
+            const tableHeader = `
+                <thead class="sticky-header">
+                    <tr>
+                        <th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">動画</th>
+                        ${renderListHeader('publishedAt', '公開日', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderListHeader('viewCount', '再生回数', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderListHeader('subscriberCount', '登録者', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderListHeader('channelOpenDate', '開設日', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        ${renderListHeader('viewRate', '再生率', 'px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider')}
+                        <th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" style="min-width: 200px;">メモ</th>
+                        <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-32">アクション</th>
+                    </tr>
+                </thead>`;
+
+            const tableRows = list.map(video => {
+                 const safeTitle = video.title.replace(/"/g, '&quot;');
+                 const openDate = video.channelOpenDate ? new Date(video.channelOpenDate).toLocaleDateString() : '-';
+                 return `
+                <tr class="hover:bg-gray-800">
+                     <td class="px-2 py-3" style="min-width: 300px;">
+                        <div class="flex items-center gap-3">
+                            <div class="w-32 h-18 flex-shrink-0 bg-black rounded-md">
+                                <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer">
+                                    <img src="${video.thumbnail}" alt="${video.title}" class="w-full h-full object-cover rounded-md">
+                                </a>
+                            </div>
+                            <div class="flex-grow">
+                                <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer" class="font-semibold line-clamp-2 hover:text-red-400">${video.title}</a>
+                                <p class="text-xs text-gray-400 mt-1 truncate">${video.channelTitle}</p>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <button class="copy-btn" data-copy-text="https://www.youtube.com/watch?v=${video.id}" data-tooltip="動画URLをコピー">${icons.copy}</button>
+                                    <button class="copy-btn" data-copy-text="${video.channelTitle}" data-tooltip="チャンネル名をコピー">${icons.copy}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${new Date(video.publishedAt).toLocaleDateString()}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${video.viewCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${video.subscriberCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${openDate}</td>
+                    <td class="px-2 py-3 whitespace-nowrap text-right text-gray-300 text-sm">${video.viewRate.toFixed(2)}%</td>
+                    <td class="px-2 py-3">
+                         <textarea data-video-id="${video.id}" class="kw-note-input w-full h-full min-h-[80px] bg-[#282828] border border-gray-600 rounded-md shadow-sm py-2 px-3 text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-red-500" placeholder="メモ...">${video.note || ''}</textarea>
+                    </td>
+                    <td class="px-2 py-3 whitespace-nowrap text-center">
+                         <div class="flex flex-col gap-2 items-center w-32">
+                             <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-analysis-btn w-full text-white bg-purple-600 hover:bg-purple-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                ${icons.sparkles} コメント分析
+                            </button>
+                             <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-wall-bounce-btn w-full text-white bg-green-600 hover:bg-green-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                ${icons.chat} 壁打ち機能
+                            </button>
+                            <button data-video-id="${video.id}" class="remove-from-list-btn w-full text-white bg-gray-700 hover:bg-red-900 hover:text-red-200 text-xs py-1 px-3 rounded transition-colors" data-tooltip="リストから削除">
+                                ${icons.trash} 削除
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;}).join('');
+
+            container.innerHTML = `<div class="overflow-auto" style="max-height: 80vh;"><table class="min-w-full divide-y divide-gray-700">${tableHeader}<tbody class="divide-y divide-gray-700">${tableRows}</tbody></table></div>`;
+        };
+
+        const renderKeywordTool = () => {
+            if (keywordToolScreen.querySelector('#keyword-search-form')) return; // Already rendered
+            keywordToolScreen.innerHTML = `
+                <div class="flex flex-col min-h-screen bg-[#181818] text-gray-200">
+                    ${createToolHeader('キーワードリサーチ', 'keyword')}
+                    <main class="flex-grow">
+                        <div class="w-full max-w-screen-2xl mx-auto p-4 sm:p-6 lg:p-8">
+                             ${createHowToUseSection('キーワードリサーチツール', [
+                                '下のパネルで「検索キーワード」や期間、再生回数などの条件を設定します。',
+                                '「検索実行」ボタンを押すと、条件に合った動画が「検索結果」に表示されます。',
+                                'AIボタンで、コメント分析や壁打ち機能を使用できます（Gemini APIキーが必要）。',
+                                '結果の各行にある「追加」ボタンで、気になる動画を「リサーチリスト」に保存できます。'
+                            ])}
+
+                            <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700 mb-8">
+                                <h2 class="text-xl font-bold text-white mb-4">検索条件</h2>
+                                <form id="keyword-search-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <div class="lg:col-span-2">
+                                        <label for="kw-query" class="block text-sm font-medium text-gray-300 mb-2">検索キーワード</label>
+                                        <input type="text" id="kw-query" name="query" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-400" placeholder="例: VLOG, ゲーム実況" required>
+                                    </div>
+                                    <div>
+                                        <label for="kw-sortOrder" class="block text-sm font-medium text-gray-300 mb-2">並び順</label>
+                                        <select id="kw-sortOrder" name="sortOrder" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                            <option value="viewCount">再生回数の多い順</option>
+                                            <option value="relevance">関連性の高い順</option>
+                                            <option value="date">新しい順</option>
+                                            <option value="rating">評価順</option>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="block text-sm font-medium text-gray-300">投稿期間</label>
+                                        <select id="kw-period-preset" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                            <option value="" disabled selected>簡易設定を選択...</option>
+                                            <option value="7">直近1週間</option>
+                                            <option value="30">直近1ヶ月</option>
+                                            <option value="90">直近3ヶ月</option>
+                                            <option value="180">直近6ヶ月</option>
+                                            <option value="365">直近1年</option>
+                                        </select>
+                                        <input type="number" id="kw-periodDays" name="periodDays" value="30" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="日数で指定" required>
+                                    </div>
+                                    <div>
+                                        <label for="kw-minViewCount" class="block text-sm font-medium text-gray-300 mb-2">最低再生回数</label>
+                                        <input type="number" id="kw-minViewCount" name="minViewCount" value="1000" min="0" step="1000" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                    </div>
+                                    <div>
+                                        <label for="kw-maxSubscribers" class="block text-sm font-medium text-gray-300 mb-2">最高登録者数 (空欄は無制限)</label>
+                                        <input type="number" id="kw-maxSubscribers" name="maxSubscribers" min="0" step="10000" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                    </div>
+                                     <div>
+                                        <label for="kw-searchLimit" class="block text-sm font-medium text-gray-300 mb-2">検索上限</label>
+                                        <select id="kw-searchLimit" name="searchLimit" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                            <option value="25">25件</option>
+                                            <option value="50">50件</option>
+                                            <option value="100" selected>100件</option>
+                                            <option value="150">150件</option>
+                                        </select>
+                                    </div>
+                                    <div class="lg:col-span-4">
+                                        <label class="block text-sm font-medium text-gray-300 mb-3">動画の長さ</label>
+                                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                                            ${[
+                                                {val: 'any', lab: 'すべて'},
+                                                {val: 'under_1_min', lab: '1分未満'},
+                                                {val: 'under_4_min', lab: '4分未満'},
+                                                {val: 'over_4_min_all', lab: '4分以上'},
+                                                {val: 'over_20_min', lab: '20分以上'}
+                                            ].map((opt, i) => {
+                                                return `<label class="flex items-center justify-center text-center p-2 rounded-lg cursor-pointer transition-colors ${i === 0 ? 'bg-red-600 text-white' : 'bg-[#3f3f3f] hover:bg-gray-600'}"><input type="radio" name="videoDuration" value="${opt.val}" class="sr-only" ${i === 0 ? 'checked' : ''}><span>${opt.lab}</span></label>`
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="lg:col-span-4 flex items-end">
+                                        <button type="submit" class="w-full h-fit flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                            ${icons.search} 検索実行
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="space-y-8">
+                                <div id="kw-error-container"></div>
+                                <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700">
+                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                                        <div><h2 class="text-xl font-bold text-white">検索結果 (<span id="kw-results-count">0</span>件)</h2></div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <button id="kw-trend-analysis-btn" class="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.chart} 全体傾向分析(AI)</button>
+                                            <button id="kw-add-all-btn" class="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.plus} 全てリストに追加</button>
+                                            <button id="kw-download-all-btn" class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.download} CSVダウンロード</button>
+                                        </div>
+                                    </div>
+                                    <div id="kw-results-container" class="text-center py-10 text-gray-500"><p>検索条件を入力して検索を実行してください。</p></div>
+                                </div>
+                                <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700">
+                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                                        <div>
+                                            <h2 class="text-xl font-bold text-white">リサーチリスト (<span id="kw-list-count">0</span>)</h2>
+                                            <p class="text-sm text-gray-400">検索結果から追加した動画のリストです。</p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button id="kw-clear-list-btn" class="flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.trash.replace('w-4 h-4 mr-1', 'w-5 h-5 mr-2')} リストをクリア</button>
+                                            <button id="kw-download-list-btn" class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.download} CSVダウンロード</button>
+                                        </div>
+                                    </div>
+                                    <div class="mb-6 border-t border-gray-700 pt-6">
+                                        <h3 class="text-sm font-medium text-gray-300 mb-2">URLから直接追加</h3>
+                                        <div id="kw-add-by-url-container" class="flex flex-col sm:flex-row gap-2">
+                                            <textarea name="urls" rows="2" class="flex-grow bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-400" placeholder="YouTube動画のURLを改行で区切って入力..."></textarea>
+                                            <button type="button" id="kw-add-by-url-btn" class="flex-shrink-0 flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">${icons.plus} リストに追加</button>
+                                        </div>
+                                    </div>
+                                    <div id="kw-research-list-container" class="text-center py-10 text-gray-500"><p>リサーチリストは空です。</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            `;
+            const searchForm = keywordToolScreen.querySelector('#keyword-search-form');
+            if (searchForm) {
+                searchForm.addEventListener('submit', handleKeywordSearch);
+            }
+        };
+        
+        // --- CHANNEL TOOL ---
+        const renderChannelTool = () => {
+             if (channelToolScreen.querySelector('#channel-search-form')) return;
+             channelToolScreen.innerHTML = `
+                <div class="flex flex-col min-h-screen bg-[#181818] text-gray-200">
+                    ${createToolHeader('チャンネルリサーチ', 'channel')}
+                    <main class="flex-grow">
+                        <div class="w-full max-w-screen-2xl mx-auto p-4 sm:p-6 lg:p-8">
+                            ${createHowToUseSection('チャンネルリサーチツール', [
+                                '「チャンネル名」を入力し、特定のチャンネルの動画を分析します（複数指定可能）。',
+                                '直近の動画だけでなく、過去の動画も含めて期間指定で検索できます。',
+                                '再生回数や動画の長さで絞り込み、効率的にリサーチできます。',
+                                '結果はチャンネルごとにタブで切り替えて表示されます。'
+                            ])}
+                            
+                            <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700 mb-8">
+                                <h2 class="text-xl font-bold text-white mb-4">チャンネル検索条件</h2>
+                                <form id="channel-search-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <div class="lg:col-span-2">
+                                        <label for="ch-channelNames" class="block text-sm font-medium text-gray-300 mb-2">チャンネル名 (改行で複数、最大5件)</label>
+                                        <textarea id="ch-channelNames" name="channelNames" rows="3" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-400" placeholder="ヒカキンTV&#10;はじめしゃちょー" required></textarea>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="block text-sm font-medium text-gray-300">投稿期間</label>
+                                        <select id="ch-period-preset" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                            <option value="" disabled selected>簡易設定を選択...</option>
+                                            <option value="7">直近1週間</option>
+                                            <option value="30">直近1ヶ月</option>
+                                            <option value="90">直近3ヶ月</option>
+                                            <option value="180">直近6ヶ月</option>
+                                            <option value="365">直近1年</option>
+                                            <option value="1095">直近3年</option>
+                                            <option value="0">全期間 (上限なし)</option>
+                                        </select>
+                                        <input type="number" id="ch-periodDays" name="periodDays" value="30" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="日数で指定 (0=上限なし)" required>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="ch-minViewCount" class="block text-sm font-medium text-gray-300 mb-2">最低再生回数</label>
+                                            <input type="number" id="ch-minViewCount" name="minViewCount" value="0" min="0" step="1000" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                        </div>
+                                         <div>
+                                            <label for="ch-searchLimit" class="block text-sm font-medium text-gray-300 mb-2">取得件数上限</label>
+                                             <select id="ch-searchLimit" name="searchLimit" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                                <option value="50" selected>50件</option>
+                                                <option value="100">100件</option>
+                                                <option value="150">150件</option>
+                                                <option value="200">200件</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="lg:col-span-4">
+                                        <label class="block text-sm font-medium text-gray-300 mb-3">動画の長さ</label>
+                                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                                            ${[
+                                                {val: 'any', lab: 'すべて'},
+                                                {val: 'under_1_min', lab: '1分未満'},
+                                                {val: 'under_4_min', lab: '4分未満'},
+                                                {val: 'over_4_min', lab: '4分以上'},
+                                                {val: 'over_20_min', lab: '20分以上'}
+                                            ].map((opt, i) => {
+                                                return `<label class="flex items-center justify-center text-center p-2 rounded-lg cursor-pointer transition-colors ${i === 0 ? 'bg-red-600 text-white' : 'bg-[#3f3f3f] hover:bg-gray-600'}"><input type="radio" name="videoDuration" value="${opt.val}" class="sr-only" ${i === 0 ? 'checked' : ''}><span>${opt.lab}</span></label>`
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="lg:col-span-4 flex items-end">
+                                        <button type="submit" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500 transition-colors">
+                                            ${icons.search} 検索実行
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            
+                            <div class="space-y-8">
+                                <div id="ch-error-container"></div>
+                                <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700">
+                                    <h2 class="text-xl font-bold text-white mb-4">検索結果</h2>
+                                    <div id="ch-results-container" class="text-center py-10 text-gray-500"><p>チャンネル名を入力して検索してください。</p></div>
+                                </div>
+                                <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700">
+                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                                        <div>
+                                            <h2 class="text-xl font-bold text-white">リサーチリスト (<span id="ch-list-count">0</span>)</h2>
+                                            <p class="text-sm text-gray-400">検索結果から追加した動画のリストです。</p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button id="ch-clear-list-btn" class="flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.trash.replace('w-4 h-4 mr-1', 'w-5 h-5 mr-2')} リストをクリア</button>
+                                            <button id="ch-download-list-btn" class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:opacity-50" disabled>${icons.download} CSVダウンロード</button>
+                                        </div>
+                                    </div>
+                                    <div id="ch-research-list-container" class="text-center py-10 text-gray-500"><p>リサーチリストは空です。</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+             `;
+            const searchForm = channelToolScreen.querySelector('#channel-search-form');
+            if (searchForm) {
+                searchForm.addEventListener('submit', handleChannelSearch);
+            }
+        };
+
+        const handleChannelSearch = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const resultsContainer = document.getElementById('ch-results-container');
+            const errorContainer = document.getElementById('ch-error-container');
+            const submitButton = form.querySelector('button[type="submit"]');
+
+            errorContainer.innerHTML = '';
+            showLoader(resultsContainer);
+            if (submitButton) submitButton.disabled = true;
+
+            try {
+                const formData = new FormData(form);
+                const channelNames = formData.get('channelNames').split('\n').map(name => name.trim()).filter(Boolean);
+                state.channel.searchedChannelNames = channelNames; // Store the order
+                
+                const periodDays = parseInt(formData.get('periodDays'), 10);
+                // If periodDays is 0 (or less), we consider it "No Limit" and pass null
+                const publishedAfter = periodDays > 0 
+                    ? new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString() 
+                    : null;
+
+                const options = {
+                    publishedAfter,
+                    videoDuration: formData.get('videoDuration'),
+                    minViewCount: parseInt(formData.get('minViewCount'), 10) || 0,
+                    searchLimit: parseInt(formData.get('searchLimit'), 10)
+                };
+
+                if (channelNames.length === 0) throw new Error("チャンネル名を入力してください。");
+                if (channelNames.length > 5) throw new Error("チャンネルは最大5件まで同時に検索できます。");
+
+                const results = {};
+                await Promise.all(channelNames.map(async (name) => {
+                    try {
+                        const channelId = await findChannelIdByName(name);
+                        const videos = await searchVideosByChannel(channelId, options);
+                        results[name] = { data: videos, channelName: name };
+                    } catch (err) {
+                        results[name] = { error: err.message, channelName: name };
+                    }
+                }));
+                state.channel.searchResults = results;
+                renderChannelResults();
+            } catch (error) {
+                console.error(error);
+                showError(errorContainer, error.message);
+                resultsContainer.innerHTML = '<p class="text-center py-10 text-gray-500">検索中にエラーが発生しました。</p>';
+            } finally {
+                if (submitButton) submitButton.disabled = false;
+            }
+        };
+
+        const renderChannelResults = () => {
+            const container = document.getElementById('ch-results-container');
+            const results = state.channel.searchResults;
+            const channelNames = state.channel.searchedChannelNames || Object.keys(results);
+
+            if (channelNames.length === 0) {
+                container.innerHTML = '<p class="text-center py-10 text-gray-500">検索結果がありません。</p>';
+                return;
+            }
+
+            const tabs = channelNames.map((name, index) =>
+                `<button class="channel-tab px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${index === 0 ? 'tab-active' : 'border-transparent text-gray-400 hover:text-white hover:border-gray-500'}" data-channel="${name}">
+                    ${name} (${results[name]?.data?.length || 0}件)
+                </button>`
+            ).join('');
+
+            const tabContents = channelNames.map((name, index) => {
+                const result = results[name];
+                let content;
+                if (!result) {
+                    content = `<div class="p-4 text-gray-500">結果がありません。</div>`;
+                } else if (result.error) {
+                    content = `<div class="p-4 text-red-400">${result.error}</div>`;
+                } else if (result.data.length === 0) {
+                    content = '<p class="text-center py-10 text-gray-500">この期間に投稿された動画はありません。</p>';
+                } else {
+                    const { sortKey, sortOrder } = state.channel;
+                    result.data.sort((a, b) => {
+                        const valA = a[sortKey];
+                        const valB = b[sortKey];
+                        if (typeof valA === 'string') return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                        return sortOrder === 'asc' ? valA - valB : valB - a[sortKey];
+                    });
+                    
+                    const renderHeader = (key, label) => {
+                        const icon = sortKey === key ? (sortOrder === 'asc' ? icons.arrowUp : icons.arrowDown) : icons.arrowsUpDown;
+                        return `<th data-sort-key="${key}" class="ch-sort-header sortable-header px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider"><div class="flex items-center justify-end">${label}<span class="sort-icon ${sortKey === key ? 'active' : ''}">${icon}</span></div></th>`;
+                    };
+                    
+                    const tableHeader = `
+                        <thead class="sticky-header"><tr>
+                            <th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">動画</th>
+                            ${renderHeader('publishedAt', '投稿日')}
+                            ${renderHeader('viewCount', '再生回数')}
+                            ${renderHeader('duration', '時間')}
+                            ${renderHeader('subscriberCount', '登録者数')}
+                            ${renderHeader('viewRate', '再生率')}
+                            ${renderHeader('likeCount', '高評価')}
+                            ${renderHeader('likeRate', '高評価率')}
+                            ${renderHeader('commentCount', 'コメント')}
+                            ${renderHeader('commentRate', 'コメント率')}
+                            <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-32">アクション</th>
+                        </tr></thead>`;
+                    const tableRows = result.data.map(video => {
+                         const isInList = state.channel.researchList.some(item => item.id === video.id);
+                         const safeTitle = video.title.replace(/"/g, '&quot;');
+                         return `<tr class="hover:bg-gray-800">
+                            <td class="px-2 py-3" style="min-width: 300px;">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-32 h-18 flex-shrink-0 bg-black rounded-md">
+                                        <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer">
+                                            <img src="${video.thumbnail}" alt="${video.title}" class="w-full h-full object-cover rounded-md">
+                                        </a>
+                                    </div>
+                                    <div class="flex-grow">
+                                        <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer" class="font-semibold line-clamp-2 hover:text-red-400">${video.title}</a>
+                                        <button class="copy-btn mt-1" data-copy-text="https://www.youtube.com/watch?v=${video.id}" data-tooltip="動画URLをコピー">${icons.copy}</button>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${new Date(video.publishedAt).toLocaleDateString()}</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.viewCount.toLocaleString()}</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${formatDuration(video.duration)}</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.subscriberCount.toLocaleString()}</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.viewRate.toFixed(2)}%</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.likeCount.toLocaleString()}</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.likeRate.toFixed(2)}%</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.commentCount.toLocaleString()}</td>
+                            <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.commentRate.toFixed(2)}%</td>
+                             <td class="px-2 py-3 whitespace-nowrap text-center">
+                                <div class="flex flex-col gap-2 items-center w-32">
+                                     <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-analysis-btn w-full text-white bg-purple-600 hover:bg-purple-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                        ${icons.sparkles} コメント分析
+                                    </button>
+                                     <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-wall-bounce-btn w-full text-white bg-green-600 hover:bg-green-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                        ${icons.chat} 壁打ち機能
+                                    </button>
+                                    <button data-video-id="${video.id}" data-channel-name="${name}" ${isInList ? 'disabled' : ''} class="ch-add-to-list-btn w-full text-white font-semibold py-1 px-3 rounded-lg transition-colors text-xs ${isInList ? 'bg-gray-600 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}">${isInList ? '追加済' : '追加'}</button>
+                                </div>
+                            </td>
+                         </tr>`;
+                    }).join('');
+                    content = `<div class="overflow-auto" style="max-height: 70vh;"><table class="min-w-full divide-y divide-gray-700">${tableHeader}<tbody class="divide-y divide-gray-700">${tableRows}</tbody></table></div>`;
+                }
+                return `<div class="channel-tab-content ${index !== 0 ? 'hidden' : ''}" data-channel-content="${name}">${content}</div>`;
+            }).join('');
+            
+            container.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div class="border-b border-gray-700">
+                        <nav class="-mb-px flex space-x-4" aria-label="Tabs">${tabs}</nav>
+                    </div>
+                     <div class="flex items-center gap-2">
+                        <button id="ch-trend-analysis-btn" class="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-colors">${icons.chart} 全体傾向分析(AI)</button>
+                        <button id="ch-add-all-btn" class="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition-colors">${icons.plus} 表示中をリスト追加</button>
+                        <button id="ch-download-all-btn" class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">${icons.download} CSVダウンロード</button>
+                    </div>
+                </div>
+                <div class="mt-4">${tabContents}</div>
+            `;
+        };
+
+        const renderChannelResearchList = () => {
+            const container = document.getElementById('ch-research-list-container');
+            const list = state.channel.researchList;
+            
+            const { listSortKey, listSortOrder } = state.channel;
+            list.sort((a, b) => {
+                const valA = a[listSortKey];
+                const valB = b[listSortKey];
+                if (typeof valA === 'string') return listSortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                return listSortOrder === 'asc' ? valA - valB : valB - a[listSortKey];
+            });
+
+            document.getElementById('ch-list-count').textContent = list.length;
+            document.getElementById('ch-download-list-btn').disabled = list.length === 0;
+            document.getElementById('ch-clear-list-btn').disabled = list.length === 0;
+
+            if (list.length === 0) {
+                 container.innerHTML = '<p class="text-center py-10 text-gray-500">リサーチリストは空です。</p>';
+                 return;
+            }
+
+            const renderListHeader = (key, label) => {
+                const icon = listSortKey === key ? (listSortOrder === 'asc' ? icons.arrowUp : icons.arrowDown) : icons.arrowsUpDown;
+                return `<th data-sort-key="${key}" class="ch-list-sort-header sortable-header px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider"><div class="flex items-center justify-end">${label}<span class="sort-icon ${listSortKey === key ? 'active' : ''}">${icon}</span></div></th>`;
+            };
+
+            const tableHeader = `
+                <thead class="sticky-header"><tr>
+                    <th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">動画</th>
+                    ${renderListHeader('publishedAt', '投稿日')}
+                    ${renderListHeader('viewCount', '再生回数')}
+                    ${renderListHeader('duration', '時間')}
+                    ${renderListHeader('subscriberCount', '登録者数')}
+                    ${renderListHeader('viewRate', '再生率')}
+                    ${renderListHeader('likeCount', '高評価')}
+                    ${renderListHeader('likeRate', '高評価率')}
+                    ${renderListHeader('commentCount', 'コメント')}
+                    ${renderListHeader('commentRate', 'コメント率')}
+                    <th class="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" style="min-width: 200px;">メモ</th>
+                    <th class="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider w-32">アクション</th>
+                </tr></thead>`;
+
+            const tableRows = list.map(video => {
+                const safeTitle = video.title.replace(/"/g, '&quot;');
+                return `
+                <tr class="hover:bg-gray-800">
+                    <td class="px-2 py-3" style="min-width: 300px;">
+                        <div class="flex items-center gap-3">
+                            <div class="w-32 h-18 flex-shrink-0 bg-black rounded-md">
+                                <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer">
+                                    <img src="${video.thumbnail}" alt="${video.title}" class="w-full h-full object-cover rounded-md">
+                                </a>
+                            </div>
+                            <div class="flex-grow">
+                                <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer" class="font-semibold line-clamp-2 hover:text-red-400">${video.title}</a>
+                                <p class="text-xs text-gray-400 mt-1 truncate">${video.channelName}</p>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <button class="copy-btn" data-copy-text="https://www.youtube.com/watch?v=${video.id}" data-tooltip="動画URLをコピー">${icons.copy}</button>
+                                    <button class="copy-btn" data-copy-text="${video.channelName}" data-tooltip="チャンネル名をコピー">${icons.copy}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${new Date(video.publishedAt).toLocaleDateString()}</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.viewCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${formatDuration(video.duration)}</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.subscriberCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.viewRate.toFixed(2)}%</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.likeCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.likeRate.toFixed(2)}%</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.commentCount.toLocaleString()}</td>
+                    <td class="px-2 py-3 text-right text-sm text-gray-300 whitespace-nowrap">${video.commentRate.toFixed(2)}%</td>
+                    <td class="px-2 py-3">
+                        <textarea data-video-id="${video.id}" class="ch-note-input w-full h-full min-h-[80px] bg-[#282828] border border-gray-600 rounded-md shadow-sm py-2 px-3 text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-red-500" placeholder="メモ...">${video.note || ''}</textarea>
+                    </td>
+                     <td class="px-2 py-3 whitespace-nowrap text-center">
+                        <div class="flex flex-col gap-2 items-center w-32">
+                             <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-analysis-btn w-full text-white bg-purple-600 hover:bg-purple-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                ${icons.sparkles} コメント分析
+                            </button>
+                             <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-wall-bounce-btn w-full text-white bg-green-600 hover:bg-green-700 text-xs py-1 px-2 rounded flex items-center justify-center shadow-sm transition-colors">
+                                ${icons.chat} 壁打ち機能
+                            </button>
+                            <button data-video-id="${video.id}" class="ch-remove-from-list-btn w-full text-white bg-gray-700 hover:bg-red-900 hover:text-red-200 text-xs py-1 px-3 rounded transition-colors" data-tooltip="リストから削除">
+                                ${icons.trash} 削除
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;}).join('');
+
+            container.innerHTML = `<div class="overflow-auto" style="max-height: 70vh;"><table class="min-w-full divide-y divide-gray-700">${tableHeader}<tbody class="divide-y divide-gray-700">${tableRows}</tbody></table></div>`;
+        };
+
+        // --- VIDEO ANALYSIS TOOL ---
+        const renderVideoTool = () => {
+             if (videoToolScreen.querySelector('#video-analysis-form')) return; // Already rendered
+             videoToolScreen.innerHTML = `
+                <div class="flex flex-col min-h-screen bg-[#181818] text-gray-200">
+                    ${createToolHeader('動画分析ツール', 'video')}
+                    <main class="flex-grow">
+                        <div class="w-full max-w-screen-2xl mx-auto p-4 sm:p-6 lg:p-8">
+                             ${createHowToUseSection('動画分析ツール', [
+                                '分析したいYouTube動画のURLを貼り付けます（複数可、最大15件）。',
+                                '「分析を実行」ボタンを押すと、動画の詳細情報、タグ、コメントが表示されます。',
+                                '「コメントAI分析」や「壁打ち機能」で、動画に対する深い洞察を得られます。',
+                                '分析結果はCSV形式でダウンロード可能です。'
+                            ])}
+
+                            <div class="bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700 mb-8">
+                                <h2 class="text-xl font-bold text-white mb-4">動画分析</h2>
+                                <form id="video-analysis-form" class="space-y-4">
+                                    <div>
+                                        <label for="video-urls-input" class="block text-sm font-medium text-gray-300 mb-2">動画URL (改行で複数、最大15件)</label>
+                                        <textarea id="video-urls-input" name="urls" rows="4" class="w-full bg-[#3f3f3f] border border-gray-600 rounded-lg shadow-sm py-2 px-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500 placeholder-gray-400" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+                                    </div>
+                                    <div class="flex justify-end">
+                                        <button type="submit" class="flex justify-center items-center py-3 px-6 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500 transition-colors">
+                                            ${icons.search} 分析を実行
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="space-y-8">
+                                <div id="video-error-container"></div>
+                                <div id="video-results-container"></div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+             `;
+             const form = videoToolScreen.querySelector('#video-analysis-form');
+             if(form) form.addEventListener('submit', handleVideoAnalysis);
+        };
+
+        const handleVideoAnalysis = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const resultsContainer = document.getElementById('video-results-container');
+            const errorContainer = document.getElementById('video-error-container');
+            const submitButton = form.querySelector('button[type="submit"]');
+
+            errorContainer.innerHTML = '';
+            showLoader(resultsContainer);
+            if (submitButton) submitButton.disabled = true;
+
+            try {
+                const urls = form.querySelector('#video-urls-input').value.split('\n').map(url => url.trim()).filter(Boolean);
+                if (urls.length === 0) throw new Error("動画URLを入力してください。");
+                if (urls.length > 15) throw new Error("動画は最大15件まで同時に分析できます。");
+                
+                const videoIds = urls.map(extractVideoId).filter(Boolean);
+                if (videoIds.length !== urls.length) throw new Error("無効なYouTube URLが含まれています。");
+
+                const results = await analyzeVideos(videoIds);
+                state.video.analysisResults = results.map(r => ({ ...r, selected: true }));
+                renderVideoResults();
+            } catch(error) {
+                console.error(error);
+                showError(errorContainer, error.message);
+                resultsContainer.innerHTML = '<p class="text-center py-10 text-gray-500">分析中にエラーが発生しました。</p>';
+            } finally {
+                if (submitButton) submitButton.disabled = false;
+            }
+        };
+
+        const renderVideoResults = () => {
+            const container = document.getElementById('video-results-container');
+            const results = state.video.analysisResults;
+            if (results.length === 0) {
+                 container.innerHTML = ''; return;
+            }
+            container.innerHTML = `
+                 <div class="flex justify-end gap-2 mb-4">
+                    <button id="video-trend-analysis-btn" class="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-colors">${icons.chart} 全体傾向分析(AI)</button>
+                    <button id="video-download-selected-btn" class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">${icons.download} 選択項目をダウンロード</button>
+                    <button id="video-download-all-btn" class="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">${icons.download} 全てダウンロード</button>
+                </div>
+                <div class="space-y-6">
+                    ${results.map(video => {
+                        const safeTitle = video.title.replace(/"/g, '&quot;');
+                        return `
+                        <div class="bg-[#282828] p-4 sm:p-6 rounded-xl border border-gray-700 shadow-lg">
+                           <div class="flex flex-col sm:flex-row gap-6">
+                               <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" rel="noopener noreferrer" class="flex-shrink-0 w-full sm:w-64">
+                                   <img src="${video.thumbnail.replace('mqdefault.jpg', 'hqdefault.jpg')}" alt="${video.title}" class="w-full object-cover rounded-lg">
+                               </a>
+                               <div class="flex-grow">
+                                    <div class="flex justify-between items-start">
+                                        <h3 class="text-lg font-bold line-clamp-2">${video.title}</h3>
+                                        <button class="copy-btn flex-shrink-0 ml-2" data-copy-text="https://www.youtube.com/watch?v=${video.id}" data-tooltip="動画URLをコピー">${icons.copy}</button>
+                                    </div>
+                                   <p class="text-sm text-gray-400 mt-1 flex items-center gap-1">
+                                        ${video.channelTitle}
+                                        <button class="copy-btn" data-copy-text="${video.channelTitle}" data-tooltip="チャンネル名をコピー">${icons.copy}</button>
+                                    </p>
+                                   <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 text-sm">
+                                       <div><strong class="block text-gray-400">再生回数</strong> ${video.viewCount.toLocaleString()}</div>
+                                       <div><strong class="block text-gray-400">高評価</strong> ${video.likeCount.toLocaleString()}</div>
+                                       <div><strong class="block text-gray-400">コメント</strong> ${video.commentCount.toLocaleString()}</div>
+                                       <div><strong class="block text-gray-400">公開日</strong> ${new Date(video.publishedAt).toLocaleDateString()}</div>
+                                       <div><strong class="block text-gray-400">登録者数</strong> ${video.subscriberCount.toLocaleString()}</div>
+                                       <div><strong class="block text-gray-400">再生率</strong> ${video.viewRate.toFixed(2)}%</div>
+                                   </div>
+                                    <div class="mt-4 flex gap-2">
+                                        <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-analysis-btn text-white bg-purple-600 hover:bg-purple-700 text-sm py-1.5 px-3 rounded flex items-center shadow-sm transition-colors">
+                                            ${icons.sparkles} コメントAI分析
+                                        </button>
+                                         <button data-video-id="${video.id}" data-title="${safeTitle}" class="ai-wall-bounce-btn text-white bg-green-600 hover:bg-green-700 text-sm py-1.5 px-3 rounded flex items-center shadow-sm transition-colors">
+                                            ${icons.chat} 壁打ち機能
+                                        </button>
+                                    </div>
+                               </div>
+                                <div class="flex-shrink-0 flex flex-col items-center gap-2">
+                                    <input type="checkbox" data-video-id="${video.id}" class="video-select-checkbox h-6 w-6 bg-gray-700 border-gray-500 rounded text-red-600 focus:ring-red-500" ${video.selected ? 'checked' : ''}>
+                                    <label class="text-xs text-gray-400">選択</label>
+                                </div>
+                           </div>
+                           <div class="mt-4 pt-4 border-t border-gray-700 space-y-3">
+                                <details>
+                                    <summary class="font-semibold cursor-pointer hover:text-red-400 flex justify-between items-center">
+                                        <span class="flex items-center">${icons.chevronRight} 動画概要欄</span>
+                                        <button class="copy-btn" data-copy-text="${video.description || ''}" data-tooltip="概要欄をコピー">${icons.copy}</button>
+                                    </summary>
+                                    <p class="mt-2 text-sm text-gray-300 whitespace-pre-wrap bg-[#3f3f3f] p-3 rounded-lg max-h-48 overflow-y-auto">${video.description || '概要欄はありません。'}</p>
+                                </details>
+                                <details>
+                                    <summary class="font-semibold cursor-pointer hover:text-red-400 flex justify-between items-center">
+                                        <span class="flex items-center">${icons.chevronRight} タグ (${video.tags ? video.tags.length : 0})</span>
+                                        <button class="copy-btn" data-copy-text="${video.tags ? video.tags.join(',') : ''}" data-tooltip="全てのタグをコピー">${icons.copy}</button>
+                                    </summary>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        ${video.tags && video.tags.length > 0 ? video.tags.map(tag => `
+                                            <span class="bg-[#3f3f3f] px-2 py-1 rounded text-xs text-gray-300 border border-gray-600 flex items-center gap-1">
+                                                ${tag}
+                                                <button class="copy-btn hover:text-white" data-copy-text="${tag}">${icons.copy}</button>
+                                            </span>
+                                        `).join('') : '<p class="text-sm text-gray-500">タグはありません。</p>'}
+                                    </div>
+                                </details>
+                                <details>
+                                    <summary class="font-semibold cursor-pointer hover:text-red-400 flex justify-between items-center">
+                                       <span class="flex items-center">${icons.chevronRight} 人気コメント (${video.comments.length}件)</span>
+                                       <button class="copy-btn" data-copy-text="${video.comments.map(c => `[${c.author} | ${c.likeCount} likes]: ${c.text}`).join('\n\n')}" data-tooltip="全てのコメントをコピー">${icons.copy}</button>
+                                    </summary>
+                                     <div class="mt-2 space-y-3 text-sm text-gray-300 max-h-60 overflow-y-auto pr-2">
+                                        ${video.comments.length > 0 ? video.comments.map(c => `
+                                            <div class="bg-[#3f3f3f] p-3 rounded-lg">
+                                                <p class="whitespace-pre-wrap">${c.text}</p>
+                                                <div class="flex justify-between items-center mt-2 text-gray-400 text-xs">
+                                                    <span>by ${c.author}</span>
+                                                    <span>${c.likeCount} likes</span>
+                                                </div>
+                                            </div>
+                                        `).join('') : '<p class="text-gray-500">コメントはありませんでした。</p>'}
+                                    </div>
+                                </details>
+                           </div>
+                        </div>
+                    `; }).join('')}
+                </div>
+            `;
+        };
+
+        const handleKeywordAddByUrl = async () => {
+            const container = document.getElementById('kw-add-by-url-container');
+            if (!container) return;
+            const textarea = container.querySelector('textarea');
+            const urls = textarea.value.split('\n').map(u => u.trim()).filter(Boolean);
+            if (urls.length === 0) return;
+
+            const videoIds = urls.map(extractVideoId).filter(Boolean);
+            if(videoIds.length === 0) return;
+
+            try {
+                const videos = await getVideoDetailsByIds(videoIds);
+                const newVideos = videos.filter(v => !state.keyword.researchList.some(item => item.id === v.id));
+                state.keyword.researchList.push(...newVideos);
+                renderKeywordResearchList();
+                renderKeywordResultsTable(); // To update 'added' status
+                textarea.value = '';
+            } catch (error) {
+                showError(document.getElementById('kw-error-container'), `URLからの動画取得中にエラー: ${error.message}`);
+            }
+        };
+
+        const setToolCardsDisabled = (isDisabled) => {
+            document.querySelectorAll('.tool-card').forEach(card => {
+                card.disabled = isDisabled;
+                card.classList.toggle('opacity-50', isDisabled);
+                card.classList.toggle('cursor-not-allowed', isDisabled);
+                card.classList.toggle('hover:border-red-500', !isDisabled);
+                card.classList.toggle('hover:bg-gray-800', !isDisabled);
+            });
+        };
+
+        const handleApiKeySave = () => {
+            if (apiKeyInput.disabled) { // "Change" mode
+                // Enable inputs
+                apiKeyInput.disabled = false;
+                apiKeyInput.value = '';
+                geminiApiKeyInput.disabled = false;
+                geminiApiKeyInput.value = '';
+                
+                // Reset State
+                state.apiKey = '';
+                state.geminiApiKey = '';
+                
+                // UI updates
+                saveApiKeyBtn.textContent = '設定を保存して開始';
+                saveApiKeyBtn.classList.replace('bg-gray-600', 'bg-red-600');
+                saveApiKeyBtn.classList.replace('hover:bg-gray-500', 'hover:bg-red-700');
+                apiKeyStatus.textContent = '';
+                
+                setToolCardsDisabled(true);
+            } else { // "Save" mode
+                const key = apiKeyInput.value.trim();
+                const geminiKey = geminiApiKeyInput.value.trim();
+                
+                if (key) {
+                    state.apiKey = key;
+                    state.geminiApiKey = geminiKey;
+                    
+                    // Disable inputs
+                    apiKeyInput.disabled = true;
+                    geminiApiKeyInput.disabled = true;
+                    
+                    // UI updates
+                    saveApiKeyBtn.textContent = '設定を変更';
+                    saveApiKeyBtn.classList.replace('bg-red-600', 'bg-gray-600');
+                    saveApiKeyBtn.classList.replace('hover:bg-red-700', 'hover:bg-gray-500');
+                    apiKeyStatus.textContent = '設定が保存されました。ツールを選択してください。';
+                    apiKeyStatus.classList.remove('text-red-400');
+                    apiKeyStatus.classList.add('text-green-400');
+                    
+                    setToolCardsDisabled(false);
+                } else {
+                    apiKeyStatus.textContent = '有効なYouTube APIキーを入力してください。';
+                    apiKeyStatus.classList.remove('text-green-400');
+                    apiKeyStatus.classList.add('text-red-400');
+                }
+            }
+        };
+
+        // --- GLOBAL EVENT LISTENERS ---
+        const setupGlobalEventListeners = () => {
+            if (toolSelectionContainer) {
+                toolSelectionContainer.addEventListener('click', (e) => {
+                    const card = e.target.closest('.tool-card');
+                    if (card && !card.disabled) navigateToTool(card.dataset.tool);
+                });
+            }
+
+            document.getElementById('app').addEventListener('click', (e) => {
+                const target = e.target;
+                
+                // Modal interactions
+                if (target.id === 'ai-modal-close' || target.closest('#ai-modal-close')) {
+                    closeAIModal();
+                    return;
+                }
+                if (target === aiModal) {
+                    closeAIModal();
+                    return;
+                }
+                
+                // AI Analysis Trigger
+                const aiBtn = target.closest('.ai-analysis-btn');
+                if (aiBtn) {
+                     e.stopPropagation();
+                     const { videoId, title } = aiBtn.dataset;
+                     // Check if we have pre-fetched comments (Video Tool)
+                     let comments = null;
+                     const videoInAnalysis = state.video.analysisResults.find(v => v.id === videoId);
+                     if (videoInAnalysis && videoInAnalysis.comments) {
+                         comments = videoInAnalysis.comments;
+                     }
+                     runAIAnalysis(videoId, title, comments);
+                     return;
+                }
+                
+                // Wall Bounce Trigger
+                 const wallBounceBtn = target.closest('.ai-wall-bounce-btn');
+                if (wallBounceBtn) {
+                     e.stopPropagation();
+                     const { videoId, title } = wallBounceBtn.dataset;
+                     // Check if we have pre-fetched comments
+                     let comments = null;
+                     const videoInAnalysis = state.video.analysisResults.find(v => v.id === videoId);
+                     if (videoInAnalysis && videoInAnalysis.comments) {
+                         comments = videoInAnalysis.comments;
+                     }
+                     startWallBounce(videoId, title, comments);
+                     return;
+                }
+                
+                // Trend Analysis Trigger
+                 if (target.id === 'kw-trend-analysis-btn' || target.parentElement.id === 'kw-trend-analysis-btn') {
+                     runTrendAnalysis(state.keyword.searchResults, state.keyword.currentQuery || "検索キーワード");
+                     return;
+                 }
+                 if (target.id === 'ch-trend-analysis-btn' || target.parentElement.id === 'ch-trend-analysis-btn') {
+                     const activeTabName = document.querySelector('.channel-tab.tab-active')?.dataset.channel;
+                     if(activeTabName) {
+                         const videos = state.channel.searchResults[activeTabName]?.data || [];
+                         runTrendAnalysis(videos, activeTabName);
+                     }
+                     return;
+                 }
+                  if (target.id === 'video-trend-analysis-btn' || target.parentElement.id === 'video-trend-analysis-btn') {
+                     runTrendAnalysis(state.video.analysisResults, "選択された動画一覧");
+                     return;
+                 }
+
+                // Navigation
+                const navButton = target.closest('[data-navigate-to]');
+                if (navButton) {
+                    const tool = navButton.dataset.navigateTo;
+                    if (tool === state.activeTool) return;
+                    navigateToTool(tool === 'null' ? null : tool);
+                    return;
+                }
+
+                // Copy buttons
+                const copyBtn = target.closest('.copy-btn');
+                if (copyBtn) {
+                    copyToClipboard(copyBtn.dataset.copyText, copyBtn);
+                    return;
+                }
+                
+                // --- Keyword Tool Specific ---
+                if (state.activeTool === 'keyword') {
+                     if (target.id === 'kw-add-by-url-btn' || target.closest('#kw-add-by-url-btn')) {
+                        e.preventDefault(); // Prevent any potential form submission
+                        handleKeywordAddByUrl();
+                        return;
+                    }
+                    const addBtn = target.closest('.add-to-list-btn');
+                    if (addBtn && !addBtn.disabled) {
+                        const video = state.keyword.searchResults.find(v => v.id === addBtn.dataset.videoId);
+                        if (video && !state.keyword.researchList.some(v => v.id === video.id)) {
+                            state.keyword.researchList.push(video);
+                            renderKeywordResearchList();
+                            renderKeywordResultsTable(); // Update status in main table
+                            addBtn.textContent = '追加済';
+                            addBtn.disabled = true;
+                        }
+                        return;
+                    }
+                    const removeBtn = target.closest('.remove-from-list-btn');
+                    if (removeBtn) {
+                        state.keyword.researchList = state.keyword.researchList.filter(v => v.id !== removeBtn.dataset.videoId);
+                        renderKeywordResearchList();
+                        renderKeywordResultsTable();
+                        return;
+                    }
+                    const sortHeader = target.closest('.kw-sort-header');
+                    if (sortHeader) {
+                        const key = sortHeader.dataset.sortKey;
+                        if (state.keyword.sortKey === key) {
+                            state.keyword.sortOrder = state.keyword.sortOrder === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            state.keyword.sortKey = key;
+                            state.keyword.sortOrder = 'desc';
+                        }
+                        renderKeywordResultsTable();
+                        return;
+                    }
+                     const listSortHeader = target.closest('.kw-list-sort-header');
+                     if (listSortHeader) {
+                        const key = listSortHeader.dataset.sortKey;
+                        if (state.keyword.listSortKey === key) {
+                            state.keyword.listSortOrder = state.keyword.listSortOrder === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            state.keyword.listSortKey = key;
+                            state.keyword.listSortOrder = 'desc';
+                        }
+                        renderKeywordResearchList();
+                        return;
+                    }
+                    if (target.id === 'kw-add-all-btn' || target.parentElement.id === 'kw-add-all-btn') {
+                        const newVideos = state.keyword.searchResults.filter(v => !state.keyword.researchList.some(item => item.id === v.id));
+                        state.keyword.researchList.push(...newVideos);
+                        renderKeywordResearchList();
+                        renderKeywordResultsTable();
+                        return;
+                    }
+                    if (target.id === 'kw-download-all-btn' || target.parentElement.id === 'kw-download-all-btn') {
+                        downloadKeywordCSV(state.keyword.searchResults, 'keyword_search_results.csv');
+                        return;
+                    }
+                    if (target.id === 'kw-clear-list-btn' || target.parentElement.id === 'kw-clear-list-btn') {
+                        state.keyword.researchList = [];
+                        renderKeywordResearchList();
+                        renderKeywordResultsTable();
+                        return;
+                    }
+                    if (target.id === 'kw-download-list-btn' || target.parentElement.id === 'kw-download-list-btn') {
+                        downloadKeywordCSV(state.keyword.researchList, 'keyword_research_list.csv');
+                        return;
+                    }
+                }
+                
+                // --- Channel Tool Specific ---
+                if (state.activeTool === 'channel') {
+                    const tab = target.closest('.channel-tab');
+                    if (tab) {
+                        document.querySelectorAll('.channel-tab').forEach(t => t.classList.remove('tab-active'));
+                        document.querySelectorAll('.channel-tab-content').forEach(c => c.classList.add('hidden'));
+                        tab.classList.add('tab-active');
+                        document.querySelector(`[data-channel-content="${tab.dataset.channel}"]`).classList.remove('hidden');
+                        return;
+                    }
+                    const sortHeader = target.closest('.ch-sort-header');
+                    if (sortHeader) {
+                        const key = sortHeader.dataset.sortKey;
+                        if (state.channel.sortKey === key) state.channel.sortOrder = state.channel.sortOrder === 'asc' ? 'desc' : 'asc';
+                        else { state.channel.sortKey = key; state.channel.sortOrder = 'desc'; }
+                        renderChannelResults();
+                        return;
+                    }
+                    const listSortHeader = target.closest('.ch-list-sort-header');
+                    if (listSortHeader) {
+                        const key = listSortHeader.dataset.sortKey;
+                        if (state.channel.listSortKey === key) state.channel.listSortOrder = state.channel.listSortOrder === 'asc' ? 'desc' : 'asc';
+                        else { state.channel.listSortKey = key; state.channel.listSortOrder = 'desc'; }
+                        renderChannelResearchList();
+                        return;
+                    }
+                     const addBtn = target.closest('.ch-add-to-list-btn');
+                     if (addBtn && !addBtn.disabled) {
+                         const video = state.channel.searchResults[addBtn.dataset.channelName]?.data.find(v => v.id === addBtn.dataset.videoId);
+                         if (video && !state.channel.researchList.some(item => item.id === video.id)) {
+                             state.channel.researchList.push(video);
+                             renderChannelResearchList();
+                             renderChannelResults();
+                         }
+                         return;
+                     }
+                    const removeBtn = target.closest('.ch-remove-from-list-btn');
+                    if (removeBtn) {
+                        state.channel.researchList = state.channel.researchList.filter(v => v.id !== removeBtn.dataset.videoId);
+                        renderChannelResearchList();
+                        renderChannelResults();
+                        return;
+                    }
+
+                    if (target.id === 'ch-add-all-btn' || target.parentElement.id === 'ch-add-all-btn') {
+                        const activeTabName = document.querySelector('.channel-tab.tab-active')?.dataset.channel;
+                        if(activeTabName) {
+                            const currentVideos = state.channel.searchResults[activeTabName]?.data || [];
+                            const newVideos = currentVideos.filter(v => !state.channel.researchList.some(item => item.id === v.id));
+                            state.channel.researchList.push(...newVideos);
+                            renderChannelResearchList();
+                            renderChannelResults(); // to update buttons
+                        }
+                        return;
+                    }
+                    if (target.id === 'ch-download-all-btn' || target.parentElement.id === 'ch-download-all-btn') {
+                        const allVideos = state.channel.searchedChannelNames.flatMap(name => state.channel.searchResults[name]?.data || []);
+                        if(allVideos.length > 0) downloadChannelCSV(allVideos, 'channels_all_videos.csv');
+                        return;
+                    }
+                    
+                    if (target.id === 'ch-clear-list-btn' || target.parentElement.id === 'ch-clear-list-btn') {
+                        state.channel.researchList = [];
+                        renderChannelResearchList();
+                        renderChannelResults();
+                        return;
+                    }
+                    if (target.id === 'ch-download-list-btn' || target.parentElement.id === 'ch-download-list-btn') {
+                        downloadChannelCSV(state.channel.researchList, 'channel_research_list.csv');
+                        return;
+                    }
+                }
+                
+                // --- Video Tool Specific ---
+                 if (state.activeTool === 'video') {
+                     if (target.id === 'video-download-selected-btn' || target.parentElement.id === 'video-download-selected-btn') {
+                        const selected = state.video.analysisResults.filter(v => v.selected);
+                        if (selected.length === 0) return;
+                        downloadVideoAnalysisCSV(selected, 'video_analysis_selected.csv');
+                     }
+                     if (target.id === 'video-download-all-btn' || target.parentElement.id === 'video-download-all-btn') {
+                        if (state.video.analysisResults.length === 0) return;
+                        downloadVideoAnalysisCSV(state.video.analysisResults, 'video_analysis_all.csv');
+                     }
+                 }
+            });
+            
+             document.body.addEventListener('change', e => {
+                if (e.target.id === 'ch-period-preset' || e.target.id === 'kw-period-preset') {
+                    const days = parseInt(e.target.value, 10);
+                    if (isNaN(days)) return;
+                    const toolPrefix = e.target.id.startsWith('ch') ? 'ch' : 'kw';
+                    document.getElementById(`${toolPrefix}-periodDays`).value = days;
+                }
+                const radio = e.target.closest('input[type="radio"][name="videoDuration"]');
+                if(radio) {
+                    const activeColor = 'bg-red-600';
+                    radio.closest('.grid').querySelectorAll('label').forEach(label => {
+                        label.classList.remove(activeColor, 'text-white');
+                        label.classList.add('bg-[#3f3f3f]', 'hover:bg-gray-600');
+                    });
+                    radio.parentElement.classList.add(activeColor, 'text-white');
+                    radio.parentElement.classList.remove('bg-[#3f3f3f]', 'hover:bg-gray-600');
+                }
+                 const videoSelectCheckbox = e.target.closest('.video-select-checkbox');
+                if (videoSelectCheckbox) {
+                    const video = state.video.analysisResults.find(v => v.id === videoSelectCheckbox.dataset.videoId);
+                    if (video) video.selected = videoSelectCheckbox.checked;
+                }
+            });
+
+             document.body.addEventListener('input', e => {
+                 const noteInput = e.target.closest('.kw-note-input');
+                 if (noteInput) {
+                     const video = state.keyword.researchList.find(v => v.id === noteInput.dataset.videoId);
+                     if (video) video.note = noteInput.value;
+                 }
+                  const chNoteInput = e.target.closest('.ch-note-input');
+                 if (chNoteInput) {
+                     const video = state.channel.researchList.find(v => v.id === chNoteInput.dataset.videoId);
+                     if (video) video.note = chNoteInput.value;
+                 }
+            });
+            
+            if (aiWallBounceForm) {
+                aiWallBounceForm.addEventListener('submit', handleWallBounceSubmit);
+            }
+        };
+
+        // --- INITIALIZATION ---
+        const init = () => {
+            // Tailwind Safelist
+            const safelist = ['bg-red-600', 'hover:bg-red-700', 'bg-red-800'];
+            
+            toolSelectionContainer.innerHTML = [
+                { key: 'keyword', title: 'キーワードリサーチ', desc: '指定したキーワードや条件で動画を検索し、競合分析やトレンド調査を行います。', icon: icons.keywordIcon },
+                { key: 'channel', title: 'チャンネルリサーチ', desc: '特定のチャンネルの期間などで絞り込み、コンテンツ戦略を分析します。', icon: icons.users },
+                { key: 'video', title: '動画分析', desc: '特定の動画の基本情報やコメントを取得し、詳細な分析レポートを作成します。', icon: icons.videoCamera }
+            ].map(tool => `
+                <button data-tool="${tool.key}" class="tool-card bg-[#282828] p-6 rounded-xl shadow-lg border border-gray-700 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 opacity-50 cursor-not-allowed" disabled>
+                    <div class="text-red-500">${tool.icon}</div>
+                    <h2 class="text-xl font-bold text-white mt-2">${tool.title}</h2>
+                    <p class="text-gray-400 mt-2 text-sm">${tool.desc}</p>
+                </button>
+            `).join('');
+
+            if (saveApiKeyBtn) {
+                saveApiKeyBtn.addEventListener('click', handleApiKeySave);
+            }
+            
+            setupGlobalEventListeners();
+        };
+        init();
+    </script>
+</body>
+</html>
